@@ -167,6 +167,21 @@ macro(tr_add_external_auto_library ID DIRNAME LIBNAME)
                 "-DCMAKE_OSX_SYSROOT:PATH=${CMAKE_OSX_SYSROOT}")
         endif()
 
+        if(ANDROID)
+            list(APPEND ${ID}_EXT_PROJ_CMAKE_ARGS
+                "-DANDROID_PLATFORM=${ANDROID_PLATFORM}"
+                "-DANDROID_NDK=${ANDROID_NDK}"
+                "-DANDROID_ABI=${ANDROID_ABI}"
+                "-DCMAKE_ANDROID_NDK=${CMAKE_ANDROID_NDK}"
+                "-DCMAKE_ANDROID_ARCH_ABI=${CMAKE_ANDROID_ARCH_ABI}"
+                "-DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}"
+                "-DCMAKE_SYSTEM_VERSION=${CMAKE_SYSTEM_VERSION}"
+                "-DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+                "-DCMAKE_FIND_ROOT_PATH=${CMAKE_FIND_ROOT_PATH}"
+                "-DANDROID_STL=${ANDROID_STL}"
+                "-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}")
+        endif()
+
         ExternalProject_Add(
             ${${ID}_UPSTREAM_TARGET}
             PREFIX "${CMAKE_BINARY_DIR}/third-party/${DIRNAME}.bld"

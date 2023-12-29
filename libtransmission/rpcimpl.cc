@@ -489,6 +489,7 @@ void addPeers(tr_torrent const* tor, tr_variant* list)
     case TR_KEY_seedIdleMode:
     case TR_KEY_seedRatioLimit:
     case TR_KEY_seedRatioMode:
+    case TR_KEY_sequentialDownload:
     case TR_KEY_sizeWhenDone:
     case TR_KEY_source:
     case TR_KEY_startDate:

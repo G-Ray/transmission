@@ -15,6 +15,10 @@ if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
         FORCE)
 endif()
 
+if(VCPKG_TARGET_ANDROID)
+    include(cmake/VcpkgAndroid.cmake)
+endif()
+
 project(transmission)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)

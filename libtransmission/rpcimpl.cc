@@ -618,7 +618,7 @@ void initField(tr_torrent const* const tor, tr_stat const* const st, tr_variant*
         break;
 
     case TR_KEY_sequentialDownload:
-        tr_variantDictAddBool(initme, TR_KEY_sequentialDownload, tor->isSequentialDownload());
+        tr_variantInitBool(initme, tor->isSequentialDownload());
         break;
 
     case TR_KEY_haveValid:

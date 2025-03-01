@@ -17,6 +17,7 @@
 
 #include "transmission.h" // tr_block_index_t
 #include "peer-common.h" // tr_peer*
+#include "peer-mgr-active-requests.h"
 
 /**
  * Bookkeeping for the active requests we have --
@@ -39,6 +40,9 @@ public:
 
     // erase any record of requests to `block` and return the previously-associated peers
     std::vector<tr_peer*> remove(tr_block_index_t block);
+
+    // get peers and request time for `block`
+    [[nodiscard]] std::vector<std::pair<tr_peer*, time_t>> getPeers(tr_block_index_t block) const;
 
     // return true if there's a record of a request for `block` from `peer`
     [[nodiscard]] bool has(tr_block_index_t block, tr_peer const* peer) const;

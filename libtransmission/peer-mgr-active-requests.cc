@@ -188,6 +188,22 @@ std::vector<tr_peer*> ActiveRequests::remove(tr_block_index_t block)
     return removed;
 }
 
+// get peers and request time for `block`
+std::vector<std::pair<tr_peer*, time_t>> ActiveRequests::getPeers(tr_block_index_t block) const
+{
+    auto peers_requests = std::vector<std::pair<tr_peer*, time_t>>{};
+
+    if (auto it = impl_->blocks_.find(block); it != std::end(impl_->blocks_))
+    {
+        for (auto const& sent : it->second)
+        {
+            peers_requests.emplace_back(sent.peer, sent.when);
+        }
+    }
+
+    return peers_requests;
+}
+
 // return true if there's an active request to `peer` for `block`
 bool ActiveRequests::has(tr_block_index_t block, tr_peer const* peer) const
 {

@@ -356,6 +356,12 @@ public:
         }
     }
 
+    void cancelRequest(tr_peer* peer, tr_block_index_t block)
+    {
+        active_requests.remove(block, peer);
+        maybeSendCancelRequest(peer, block, nullptr);
+    }
+
     [[nodiscard]] uint16_t countActiveWebseeds(uint64_t now) const noexcept
     {
         if (!tor->isRunning || tor->isDone())
@@ -916,6 +922,11 @@ std::vector<tr_block_span_t> tr_peerMgrGetNextRequests(tr_torrent* torrent, tr_p
             return torrent_->isSequentialDownload();
         }
 
+        [[nodiscard]] std::vector<std::pair<tr_peer*, time_t>> getPeersForActiveRequests(tr_block_index_t block) const
+        {
+            return swarm_->active_requests.getPeers(block);
+        }
+
     private:
         tr_torrent const* const torrent_;
         tr_swarm const* const swarm_;
@@ -924,7 +935,7 @@ std::vector<tr_block_span_t> tr_peerMgrGetNextRequests(tr_torrent* torrent, tr_p
 
     torrent->swarm->updateEndgame();
     auto const mediator = MediatorImpl{ torrent, peer };
-    return Wishlist{ mediator }.next(numwant);
+    return Wishlist{ mediator }.next(numwant, peer);
 }
 
 // --- Piece List Manipulation / Accessors
@@ -2515,6 +2526,7 @@ void tr_peerMgr::makeNewPeerConnections(size_t max)
 
     for (auto& candidate : getPeerCandidates(session, max))
     {
+        tr_logAddDebug("initiateConnection()");
         initiateConnection(this, candidate.tor->swarm, *candidate.atom);
     }
 }
@@ -2525,4 +2537,9 @@ bool HandshakeMediator::is_peer_known_seed(tr_torrent_id_t tor_id, tr_address co
 {
     auto const* const tor = session_.torrents().get(tor_id);
     return tor != nullptr && tor->swarm != nullptr && tor->swarm->peer_is_a_seed(addr);
+}
+
+void tr_cancelRequestForBlock(tr_peer* peer, tr_block_index_t block)
+{
+    peer->swarm->cancelRequest(peer, block);
 }

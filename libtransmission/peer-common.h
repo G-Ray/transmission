@@ -252,7 +252,7 @@ public:
     // whether or not we should free this peer soon.
     bool do_purge = false;
 
-    // how many bad pieces this piece has contributed to
+    // how many bad pieces this peer has contributed to
     uint8_t strikes = 0;
 
     // how many blocks this peer has sent us

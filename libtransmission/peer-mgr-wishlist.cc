@@ -15,7 +15,6 @@
 
 #include "crypto-utils.h" // for tr_salt_shaker
 #include "peer-mgr-wishlist.h"
-#include "tr-assert.h"
 
 namespace
 {
@@ -130,7 +129,42 @@ std::vector<tr_block_span_t> makeSpans(tr_block_index_t const* sorted_blocks, si
 
 } // namespace
 
-std::vector<tr_block_span_t> Wishlist::next(size_t n_wanted_blocks)
+// Cancel slow request for `block` if the new peer is considered faster
+void cancelSlowRequest(Wishlist::Mediator const& mediator, tr_block_index_t block, tr_peer const* peer)
+{
+    auto const now = tr_time();
+    std::vector<std::pair<tr_peer*, time_t>> const peers = mediator.getPeersForActiveRequests(block);
+    auto const peer_speed = peer->get_piece_speed_bytes_per_second(now, TR_PEER_TO_CLIENT);
+
+    if (peer_speed == 0)
+    {
+        return;
+    }
+
+    for (auto const& [current_peer, when] : peers)
+    {
+        auto const current_peer_speed = current_peer->get_piece_speed_bytes_per_second(now, TR_PEER_TO_CLIENT);
+
+        // Avoid division by zero.
+        if (current_peer_speed == 0)
+        {
+            continue;
+        }
+
+        // Estimate if time to request the block with new peer will be faster than letting it finish
+        int res = (peer_speed / current_peer_speed) - (((now - when) * peer_speed) / tr_block_info::BlockSize);
+        bool is_slow = res > 1.5; // Consider it slow if it's a bit faster than estimated
+
+        if (is_slow)
+        {
+            tr_logAddTrace(fmt::format("cancelling slow request to block {}", block));
+            tr_cancelRequestForBlock(current_peer, block);
+            return;
+        }
+    }
+}
+
+std::vector<tr_block_span_t> Wishlist::next(size_t n_wanted_blocks, tr_peer const* peer)
 {
     if (n_wanted_blocks == 0)
     {
@@ -146,6 +180,8 @@ std::vector<tr_block_span_t> Wishlist::next(size_t n_wanted_blocks)
     std::partial_sort(std::begin(candidates), std::begin(candidates) + middle, std::end(candidates));
 
     auto blocks = std::set<tr_block_index_t>{};
+    auto const is_sequential = mediator_.isSequentialDownload();
+
     for (auto const& candidate : candidates)
     {
         // do we have enough?
@@ -162,6 +198,14 @@ std::vector<tr_block_span_t> Wishlist::next(size_t n_wanted_blocks)
             if (!mediator_.clientCanRequestBlock(block))
             {
                 continue;
+            }
+
+            if (is_sequential && mediator_.countActiveRequests(block) > 0)
+            {
+                // In sequential download mode, we want to retrieve blocks as
+                // fast as possible, so cancel existing request if peer is slow
+                // and new one is faster
+                cancelSlowRequest(mediator_, block, peer);
             }
 
             // don't request from too many peers

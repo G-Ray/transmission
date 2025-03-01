@@ -15,6 +15,8 @@
 #include "transmission.h"
 
 #include "torrent.h"
+#include "peer-mgr.h"
+#include "peer-mgr-active-requests.h"
 
 /**
  * Figures out what blocks we want to request next.
@@ -33,6 +35,8 @@ public:
         [[nodiscard]] virtual tr_block_span_t blockSpan(tr_piece_index_t) const = 0;
         [[nodiscard]] virtual tr_piece_index_t countAllPieces() const = 0;
         [[nodiscard]] virtual tr_priority_t priority(tr_piece_index_t) const = 0;
+        [[nodiscard]] virtual std::vector<std::pair<tr_peer*, time_t>> getPeersForActiveRequests(
+            tr_block_index_t block) const = 0;
         virtual ~Mediator() = default;
     };
 
@@ -42,7 +46,7 @@ public:
     }
 
     // the next blocks that we should request from a peer
-    [[nodiscard]] std::vector<tr_block_span_t> next(size_t n_wanted_blocks);
+    [[nodiscard]] std::vector<tr_block_span_t> next(size_t n_wanted_blocks, tr_peer const* peer);
 
 private:
     Mediator const& mediator_;

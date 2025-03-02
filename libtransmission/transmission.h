@@ -1336,6 +1336,7 @@ struct tr_file_view
     double progress; // have / length
     tr_priority_t priority; // the file's priority
     bool wanted; // do we want to download this file?
+    std::pair<tr_piece_index_t, tr_piece_index_t> pieces_range;
 };
 tr_file_view tr_torrentFile(tr_torrent const* torrent, tr_file_index_t file);
 

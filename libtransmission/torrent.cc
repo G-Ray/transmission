@@ -1623,14 +1623,16 @@ tr_file_view tr_torrentFile(tr_torrent const* tor, tr_file_index_t file)
     auto const priority = tor->file_priorities_.filePriority(file);
     auto const wanted = tor->files_wanted_.fileWanted(file);
     auto const length = tor->fileSize(file);
+    auto const [begin, end] = tor->piecesInFile(file);
+    std::pair<tr_piece_index_t, tr_piece_index_t> const pieces_range = { begin, end };
 
     if (tor->completeness == TR_SEED || length == 0)
     {
-        return { subpath.c_str(), length, length, 1.0, priority, wanted };
+        return { subpath.c_str(), length, length, 1.0, priority, wanted, pieces_range };
     }
 
     auto const have = tor->completion.countHasBytesInSpan(tor->fpm_.byteSpan(file));
-    return { subpath.c_str(), have, length, have >= length ? 1.0 : have / double(length), priority, wanted };
+    return { subpath.c_str(), have, length, have >= length ? 1.0 : have / double(length), priority, wanted, pieces_range };
 }
 
 size_t tr_torrentFileCount(tr_torrent const* torrent)

@@ -90,7 +90,16 @@ std::vector<Candidate> getCandidates(Wishlist::Mediator const& mediator)
     auto const n = std::size(wanted_pieces);
     auto candidates = std::vector<Candidate>{};
     auto const is_sequential = mediator.isSequentialDownload();
+    auto const sequential_from_piece = mediator.sequentialDownloadFromPiece();
     candidates.reserve(n);
+
+    // In sequential download mode, start downloading from a specific piece (e.g middle of a video)
+    if (is_sequential && sequential_from_piece > 0 && sequential_from_piece < wanted_pieces.size())
+    {
+        tr_logAddInfo(fmt::format("rotating wanted_piece from piece {}", sequential_from_piece));
+        std::rotate(wanted_pieces.begin(), wanted_pieces.begin() + sequential_from_piece, wanted_pieces.end());
+    }
+
     for (size_t i = 0; i < n; ++i)
     {
         auto const [piece, n_missing] = wanted_pieces[i];
@@ -172,15 +181,18 @@ std::vector<tr_block_span_t> Wishlist::next(size_t n_wanted_blocks, tr_peer cons
     }
 
     auto candidates = getCandidates(mediator_);
+    auto const is_sequential = mediator_.isSequentialDownload();
 
-    // We usually won't need all the candidates to be sorted until endgame, so don't
-    // waste cycles sorting all of them here. partial sort is enough.
-    auto constexpr MaxSortedPieces = size_t{ 30 };
-    auto const middle = std::min(std::size(candidates), MaxSortedPieces);
-    std::partial_sort(std::begin(candidates), std::begin(candidates) + middle, std::end(candidates));
+    if (!is_sequential)
+    {
+        // We usually won't need all the candidates to be sorted until endgame, so don't
+        // waste cycles sorting all of them here. partial sort is enough.
+        auto constexpr MaxSortedPieces = size_t{ 30 };
+        auto const middle = std::min(std::size(candidates), MaxSortedPieces);
+        std::partial_sort(std::begin(candidates), std::begin(candidates) + middle, std::end(candidates));
+    }
 
     auto blocks = std::set<tr_block_index_t>{};
-    auto const is_sequential = mediator_.isSequentialDownload();
 
     for (auto const& candidate : candidates)
     {

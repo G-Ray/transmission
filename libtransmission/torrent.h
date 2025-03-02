@@ -674,6 +674,21 @@ public:
         return this->sequential_download_;
     }
 
+    constexpr void setSequentialDownloadFromPiece(tr_piece_index_t piece) noexcept
+    {
+        if (piece > pieceCount())
+        {
+            return;
+        }
+
+        this->sequential_download_from_piece = piece;
+    }
+
+    [[nodiscard]] constexpr auto sequentialDownloadFromPiece() const noexcept
+    {
+        return this->sequential_download_from_piece;
+    }
+
     constexpr void setDirty() noexcept
     {
         this->isDirty = true;
@@ -960,6 +975,8 @@ private:
     bool needs_completeness_check_ = true;
 
     bool sequential_download_ = false;
+
+    float sequential_download_from_piece = 0;
 };
 
 // ---

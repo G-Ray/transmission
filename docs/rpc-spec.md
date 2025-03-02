@@ -138,32 +138,33 @@ Request arguments:
 
 | Key | Value Type | Value Description
 |:--|:--|:--
-| `bandwidthPriority`   | number   | this torrent's bandwidth tr_priority_t
-| `downloadLimit`       | number   | maximum download speed (KBps)
-| `downloadLimited`     | boolean  | true if `downloadLimit` is honored
-| `files-unwanted`      | array    | indices of file(s) to not download
-| `files-wanted`        | array    | indices of file(s) to download
-| `group`               | string   | The name of this torrent's bandwidth group
-| `honorsSessionLimits` | boolean  | true if session upload limits are honored
-| `ids`                 | array    | torrent list, as described in 3.1
-| `labels`              | array    | array of string labels
-| `location`            | string   | new location of the torrent's content
-| `peer-limit`          | number   | maximum number of peers
-| `priority-high`       | array    | indices of high-priority file(s)
-| `priority-low`        | array    | indices of low-priority file(s)
-| `priority-normal`     | array    | indices of normal-priority file(s)
-| `queuePosition`       | number   | position of this torrent in its queue [0...n)
-| `seedIdleLimit`       | number   | torrent-level number of minutes of seeding inactivity
-| `seedIdleMode`        | number   | which seeding inactivity to use. See tr_idlelimit
-| `seedRatioLimit`      | double   | torrent-level seeding ratio
-| `seedRatioMode`       | number   | which ratio to use. See tr_ratiolimit
-| `sequentialDownload`  | boolean  | download torrent pieces sequentially
-| `trackerAdd`          | array    | **DEPRECATED** use trackerList instead
-| `trackerList`         | string   | string of announce URLs, one per line, and a blank line between [tiers](https://www.bittorrent.org/beps/bep_0012.html).
-| `trackerRemove`       | array    | **DEPRECATED** use trackerList instead
-| `trackerReplace`      | array    | **DEPRECATED** use trackerList instead
-| `uploadLimit`         | number   | maximum upload speed (KBps)
-| `uploadLimited`       | boolean  | true if `uploadLimit` is honored
+| `bandwidthPriority`           | number   | this torrent's bandwidth tr_priority_t
+| `downloadLimit`               | number   | maximum download speed (KBps)
+| `downloadLimited`             | boolean  | true if `downloadLimit` is honored
+| `files-unwanted`              | array    | indices of file(s) to not download
+| `files-wanted`                | array    | indices of file(s) to download
+| `group`                       | string   | The name of this torrent's bandwidth group
+| `honorsSessionLimits`         | boolean  | true if session upload limits are honored
+| `ids`                         | array    | torrent list, as described in 3.1
+| `labels`                      | array    | array of string labels
+| `location`                    | string   | new location of the torrent's content
+| `peer-limit`                  | number   | maximum number of peers
+| `priority-high`               | array    | indices of high-priority file(s)
+| `priority-low`                | array    | indices of low-priority file(s)
+| `priority-normal`             | array    | indices of normal-priority file(s)
+| `queuePosition`               | number   | position of this torrent in its queue [0...n)
+| `seedIdleLimit`               | number   | torrent-level number of minutes of seeding inactivity
+| `seedIdleMode`                | number   | which seeding inactivity to use. See tr_idlelimit
+| `seedRatioLimit`              | double   | torrent-level seeding ratio
+| `seedRatioMode`               | number   | which ratio to use. See tr_ratiolimit
+| `sequentialDownload`          | boolean  | download torrent pieces sequentially
+| `sequentialDownloadFromPiece` | number   | piece to download sequentially from (allowing seeking a file)
+| `trackerAdd`                  | array    | **DEPRECATED** use trackerList instead
+| `trackerList`                 | string   | string of announce URLs, one per line, and a blank line between [tiers](https://www.bittorrent.org/beps/bep_0012.html).
+| `trackerRemove`               | array    | **DEPRECATED** use trackerList instead
+| `trackerReplace`              | array    | **DEPRECATED** use trackerList instead
+| `uploadLimit`                 | number   | maximum upload speed (KBps)
+| `uploadLimited`               | boolean  | true if `uploadLimit` is honored
 
 Just as an empty `ids` value is shorthand for "all ids", using an empty array
 for `files-wanted`, `files-unwanted`, `priority-high`, `priority-low`, or
@@ -269,6 +270,7 @@ The 'source' column here corresponds to the data structure there.
 | `seedRatioLimit`| double| tr_torrent
 | `seedRatioMode`| number| tr_ratiolimit
 | `sequentialDownload`| boolean| tr_torrent
+| `sequentialDownloadFromPiece`| number| tr_torrent
 | `sizeWhenDone`| number| tr_stat
 | `startDate`| number| tr_stat
 | `status`| number (see below)| tr_stat
@@ -303,6 +305,7 @@ The 'source' column here corresponds to the data structure there.
 | `bytesCompleted` | number | tr_file_view
 | `wanted` | number | tr_file_view (**Note:** For backwards compatibility, this is serialized as an array of `0` or `1` that should be treated as booleans)
 | `priority` | number | tr_file_view
+| `piecesRange` | number | tr_file_view
 
 `peers`: an array of objects, each containing:
 

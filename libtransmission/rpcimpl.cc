@@ -324,6 +324,9 @@ void addFileStats(tr_torrent const* tor, tr_variant* list)
         tr_variantDictAddInt(d, TR_KEY_bytesCompleted, file.have);
         tr_variantDictAddInt(d, TR_KEY_priority, file.priority);
         tr_variantDictAddBool(d, TR_KEY_wanted, file.wanted);
+        auto* const pieces_range = tr_variantDictAddList(d, TR_KEY_piecesRange, 2);
+        tr_variantListAddInt(pieces_range, file.pieces_range.first);
+        tr_variantListAddInt(pieces_range, file.pieces_range.second);
     }
 }
 
@@ -490,6 +493,7 @@ void addPeers(tr_torrent const* tor, tr_variant* list)
     case TR_KEY_seedRatioLimit:
     case TR_KEY_seedRatioMode:
     case TR_KEY_sequentialDownload:
+    case TR_KEY_sequentialDownloadFromPiece:
     case TR_KEY_sizeWhenDone:
     case TR_KEY_source:
     case TR_KEY_startDate:
@@ -619,6 +623,10 @@ void initField(tr_torrent const* const tor, tr_stat const* const st, tr_variant*
 
     case TR_KEY_sequentialDownload:
         tr_variantInitBool(initme, tor->isSequentialDownload());
+        break;
+
+    case TR_KEY_sequentialDownloadFromPiece:
+        tr_variantInitInt(initme, tor->sequentialDownloadFromPiece());
         break;
 
     case TR_KEY_haveValid:
@@ -1240,6 +1248,11 @@ char const* torrentSet(tr_session* session, tr_variant* args_in, tr_variant* /*a
         if (auto val = bool{}; tr_variantDictFindBool(args_in, TR_KEY_sequentialDownload, &val))
         {
             tor->setSequentialDownload(val);
+        }
+
+        if (tr_variantDictFindReal(args_in, TR_KEY_sequentialDownloadFromPiece, &d))
+        {
+            tor->setSequentialDownloadFromPiece(d);
         }
 
         if (auto val = bool{}; tr_variantDictFindBool(args_in, TR_KEY_downloadLimited, &val))

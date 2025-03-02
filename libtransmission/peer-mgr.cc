@@ -922,7 +922,12 @@ std::vector<tr_block_span_t> tr_peerMgrGetNextRequests(tr_torrent* torrent, tr_p
             return torrent_->isSequentialDownload();
         }
 
-        [[nodiscard]] std::vector<std::pair<tr_peer*, time_t>> getPeersForActiveRequests(tr_block_index_t block) const
+        [[nodiscard]] virtual float sequentialDownloadFromPiece() const override
+        {
+            return torrent_->sequentialDownloadFromPiece();
+        }
+
+        [[nodiscard]] std::vector<std::pair<tr_peer*, time_t>> getPeersForActiveRequests(tr_block_index_t block) const override
         {
             return swarm_->active_requests.getPeers(block);
         }

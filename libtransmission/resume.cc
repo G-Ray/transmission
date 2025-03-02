@@ -901,6 +901,7 @@ void save(tr_torrent* tor)
     tr_variantDictAddInt(&top, TR_KEY_bandwidth_priority, tor->getPriority());
     tr_variantDictAddBool(&top, TR_KEY_paused, !tor->start_when_stable);
     tr_variantDictAddBool(&top, TR_KEY_sequentialDownload, tor->isSequentialDownload());
+    tr_variantDictAddInt(&top, TR_KEY_sequentialDownloadFromPiece, tor->sequentialDownloadFromPiece());
     savePeers(&top, tor);
 
     if (tor->hasMetainfo())

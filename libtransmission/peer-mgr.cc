@@ -348,6 +348,18 @@ public:
         }
     }
 
+    void cancelAllRequests()
+    {
+        tr_logAddInfo("cancelAllRequests");
+        auto const now = tr_time();
+
+        for (auto const& [block, peer] : active_requests.sentBefore(now))
+        {
+            maybeSendCancelRequest(peer, block, nullptr);
+            active_requests.remove(block, peer);
+        }
+    }
+
     void cancelAllRequestsForBlock(tr_block_index_t block, tr_peer const* no_notify)
     {
         for (auto* peer : active_requests.remove(block))
@@ -1484,6 +1496,12 @@ tr_swarm_stats tr_swarmGetStats(tr_swarm const* swarm)
     auto& stats = swarm->stats;
     stats.active_webseed_count = swarm->countActiveWebseeds(tr_time_msec());
     return stats;
+}
+
+void tr_swarmCancelAllRequests(tr_swarm* swarm)
+{
+    TR_ASSERT(swarm != nullptr);
+    swarm->cancelAllRequests();
 }
 
 void tr_swarmIncrementActivePeers(tr_swarm* swarm, tr_direction direction, bool is_active)

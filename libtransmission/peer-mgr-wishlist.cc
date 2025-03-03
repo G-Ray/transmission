@@ -161,8 +161,8 @@ void cancelSlowRequest(Wishlist::Mediator const& mediator, tr_block_index_t bloc
         }
 
         // Estimate if time to request the block with new peer will be faster than letting it finish
-        int res = (peer_speed / current_peer_speed) - (((now - when) * peer_speed) / tr_block_info::BlockSize);
-        bool is_slow = res > 1.5; // Consider it slow if it's a bit faster than estimated
+        float speed_factor = (peer_speed / current_peer_speed) - (((now - when) * peer_speed) / tr_block_info::BlockSize);
+        bool is_slow = speed_factor > 1.5; // Consider it slow if it's a bit faster than estimated
 
         if (is_slow)
         {

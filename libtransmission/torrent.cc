@@ -2330,6 +2330,12 @@ void onFileCompleted(tr_torrent* tor, tr_file_index_t i)
 
 void onPieceCompleted(tr_torrent* tor, tr_piece_index_t piece)
 {
+    if (tor->isSequentialDownload())
+    {
+        tr_logAddInfo(fmt::format("flushing torrent files"));
+        tor->session->flushTorrentFiles(tor);
+    }
+
     tr_peerMgrPieceCompleted(tor, piece);
 
     // if this piece completes any file, invoke the fileCompleted func for it

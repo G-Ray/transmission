@@ -2058,6 +2058,11 @@ size_t tr_session::countQueueFreeSlots(tr_direction dir) const noexcept
 
 // ---
 
+void tr_session::flushTorrentFiles(tr_torrent* tor) noexcept
+{
+    this->cache->flushTorrent(tor);
+}
+
 void tr_session::closeTorrentFiles(tr_torrent* tor) noexcept
 {
     this->cache->flushTorrent(tor);

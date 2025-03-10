@@ -250,3 +250,20 @@ std::vector<std::pair<tr_block_index_t, tr_peer*>> ActiveRequests::sentBefore(ti
 
     return sent_before;
 }
+
+// returns all active requests
+std::vector<std::pair<tr_block_index_t, tr_peer*>> ActiveRequests::all() const
+{
+    auto all_requests = std::vector<std::pair<tr_block_index_t, tr_peer*>>{};
+    all_requests.reserve(std::size(impl_->blocks_));
+
+    for (auto const& [block, peers_at] : impl_->blocks_)
+    {
+        for (auto const& sent : peers_at)
+        {
+            all_requests.emplace_back(block, sent.peer);
+        }
+    }
+
+    return all_requests;
+}

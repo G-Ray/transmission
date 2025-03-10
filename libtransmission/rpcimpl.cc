@@ -1247,13 +1247,13 @@ char const* torrentSet(tr_session* session, tr_variant* args_in, tr_variant* /*a
 
         if (auto val = bool{}; tr_variantDictFindBool(args_in, TR_KEY_sequentialDownload, &val))
         {
-            tr_swarmCancelAllRequests(tor->swarm);
+            tr_torrentCancelAllRequests(tor);
             tor->setSequentialDownload(val);
         }
 
         if (tr_variantDictFindInt(args_in, TR_KEY_sequentialDownloadFromPiece, &tmp))
         {
-            tr_swarmCancelAllRequests(tor->swarm);
+            tr_torrentCancelAllRequests(tor);
             tor->setSequentialDownloadFromPiece(tmp);
         }
 

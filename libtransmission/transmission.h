@@ -862,6 +862,8 @@ void tr_torrentStart(tr_torrent* torrent);
 /** @brief Stop (pause) a torrent */
 void tr_torrentStop(tr_torrent* torrent);
 
+void tr_torrentCancelAllRequests(tr_torrent const* tor);
+
 using tr_torrent_rename_done_func = void (*)( //
     tr_torrent* torrent,
     char const* oldpath,

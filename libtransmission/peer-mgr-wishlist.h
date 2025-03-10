@@ -47,7 +47,7 @@ public:
     }
 
     // the next blocks that we should request from a peer
-    [[nodiscard]] std::vector<tr_block_span_t> next(size_t n_wanted_blocks, tr_peer const* peer);
+    [[nodiscard]] std::vector<tr_block_span_t> next(size_t n_wanted_blocks, tr_torrent* torrent, tr_peer const* peer);
 
 private:
     Mediator const& mediator_;

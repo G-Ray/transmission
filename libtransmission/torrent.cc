@@ -939,6 +939,12 @@ void tr_torrentFreeInSessionThread(tr_torrent* tor)
     freeTorrent(tor);
 }
 
+void tr_torrentCancelAllRequests(tr_torrent const* tor)
+{
+    TR_ASSERT(tr_isTorrent(tor));
+    tr_swarmCancelAllRequests(tor->swarm);
+}
+
 // ---
 
 namespace

@@ -222,6 +222,8 @@ void tr_peerMgrGotBadPiece(tr_torrent* tor, tr_piece_index_t piece_index);
 
 void tr_peerMgrPieceCompleted(tr_torrent* tor, tr_piece_index_t pieceIndex);
 
-void tr_cancelRequestForBlock(tr_peer* peer, tr_block_index_t block);
+void tr_cancelRequestForBlock(tr_torrent* torrent, tr_peer* peer, tr_block_index_t block);
+
+void tr_swarmCancelAllRequests(tr_swarm* swarm);
 
 /* @} */

@@ -350,10 +350,9 @@ public:
 
     void cancelAllRequests()
     {
-        tr_logAddInfo("cancelAllRequests");
         auto const now = tr_time();
 
-        for (auto const& [block, peer] : active_requests.sentBefore(now))
+        for (auto const& [block, peer] : active_requests.all())
         {
             maybeSendCancelRequest(peer, block, nullptr);
             active_requests.remove(block, peer);
@@ -370,8 +369,8 @@ public:
 
     void cancelRequest(tr_peer* peer, tr_block_index_t block)
     {
-        active_requests.remove(block, peer);
         maybeSendCancelRequest(peer, block, nullptr);
+        active_requests.remove(block, peer);
     }
 
     [[nodiscard]] uint16_t countActiveWebseeds(uint64_t now) const noexcept
@@ -870,6 +869,11 @@ void tr_peerMgrClientSentRequests(tr_torrent* torrent, tr_peer* peer, tr_block_s
     }
 }
 
+void tr_cancelRequestForBlock(tr_torrent* torrent, tr_peer* peer, tr_block_index_t block)
+{
+    torrent->swarm->cancelRequest(peer, block);
+}
+
 std::vector<tr_block_span_t> tr_peerMgrGetNextRequests(tr_torrent* torrent, tr_peer const* peer, size_t numwant)
 {
     class MediatorImpl final : public Wishlist::Mediator
@@ -952,7 +956,7 @@ std::vector<tr_block_span_t> tr_peerMgrGetNextRequests(tr_torrent* torrent, tr_p
 
     torrent->swarm->updateEndgame();
     auto const mediator = MediatorImpl{ torrent, peer };
-    return Wishlist{ mediator }.next(numwant, peer);
+    return Wishlist{ mediator }.next(numwant, torrent, peer);
 }
 
 // --- Piece List Manipulation / Accessors
@@ -2560,9 +2564,4 @@ bool HandshakeMediator::is_peer_known_seed(tr_torrent_id_t tor_id, tr_address co
 {
     auto const* const tor = session_.torrents().get(tor_id);
     return tor != nullptr && tor->swarm != nullptr && tor->swarm->peer_is_a_seed(addr);
-}
-
-void tr_cancelRequestForBlock(tr_peer* peer, tr_block_index_t block)
-{
-    peer->swarm->cancelRequest(peer, block);
 }

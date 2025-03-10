@@ -59,6 +59,9 @@ public:
     // returns the active requests sent before `when`
     [[nodiscard]] std::vector<std::pair<tr_block_index_t, tr_peer*>> sentBefore(time_t when) const;
 
+    // returns all active requests
+    [[nodiscard]] std::vector<std::pair<tr_block_index_t, tr_peer*>> all() const;
+
 private:
     class Impl;
     std::unique_ptr<Impl> const impl_;

@@ -1247,6 +1247,10 @@ char const* torrentSet(tr_session* session, tr_variant* args_in, tr_variant* /*a
 
         if (auto val = bool{}; tr_variantDictFindBool(args_in, TR_KEY_sequentialDownload, &val))
         {
+            if (val == true)
+            {
+                tor->session->flushTorrentFiles(tor);
+            }
             tr_torrentCancelAllRequests(tor);
             tor->setSequentialDownload(val);
         }

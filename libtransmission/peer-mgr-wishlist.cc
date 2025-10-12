@@ -516,7 +516,7 @@ std::vector<tr_block_span_t> Wishlist::Impl::next(
 
             // don't request from too many peers,
             // except if we have a successful hotswap
-            if (!is_sequential|| !mediator_.try_hotswap(block, peer))
+            if (!is_sequential || !mediator_.try_hotswap(block, peer))
             {
                 if (n_req >= max_peers)
                 {

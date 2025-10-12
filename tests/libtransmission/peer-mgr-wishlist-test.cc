@@ -1301,7 +1301,8 @@ TEST_F(PeerMgrWishlistTest, gotRejectDecrementsActiveRequest)
             got_reject_.emit(nullptr, nullptr, block);
         }
 
-        return std::pair{ wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests), std::move(rejected_bitfield) };
+        return std::pair{ wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests),
+                          std::move(rejected_bitfield) };
     };
 
     // wishlist only picks blocks with no active requests when not in
@@ -1373,7 +1374,8 @@ TEST_F(PeerMgrWishlistTest, sentCancelDecrementsActiveRequest)
             sent_cancel_.emit(nullptr, nullptr, block);
         }
 
-        return std::pair{ wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests), std::move(cancelled_bitfield) };
+        return std::pair{ wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests),
+                          std::move(cancelled_bitfield) };
     };
 
     // wishlist only picks blocks with no active requests when not in

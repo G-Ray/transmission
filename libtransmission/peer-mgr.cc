@@ -997,6 +997,11 @@ tr_priority_t tr_swarm::WishlistMediator::priority(tr_piece_index_t piece) const
 
 bool tr_swarm::WishlistMediator::try_hotswap(tr_block_index_t block, tr_peer const* peer)
 {
+    /* Define slow and fast speed thresholds
+     * Values are extracted from webtorrent.
+     * We will consider hotswapping:
+     * - if the current peer is faster than slow threshold
+     * - if the current block is requested by a peer slower than fast threshold */
     static auto slow_speed_threshold = Speed{ tr_block_info::BlockSize, Speed::Units::Byps };
     static auto fast_speed_threshold = Speed{ tr_block_info::BlockSize * 3, Speed::Units::Byps };
 

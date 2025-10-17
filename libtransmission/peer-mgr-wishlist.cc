@@ -506,8 +506,6 @@ std::vector<tr_block_span_t> Wishlist::Impl::next(
                 fmt::format("piece = {}, block = {}, n_req = {}, truth = {}", candidate.piece, block, n_req, n_req_truth));
 #endif
 
-            bool is_sequential = mediator_.is_sequential_download();
-
             // don't request block from peers which we already requested from
             if (has_active_request_to_peer(block))
             {
@@ -516,7 +514,7 @@ std::vector<tr_block_span_t> Wishlist::Impl::next(
 
             // don't request from too many peers,
             // except if we have a successful hotswap
-            if (!is_sequential || !mediator_.try_hotswap(block, peer))
+            if (!mediator_.is_sequential_download() || !mediator_.try_hotswap(block, peer))
             {
                 if (n_req >= max_peers)
                 {

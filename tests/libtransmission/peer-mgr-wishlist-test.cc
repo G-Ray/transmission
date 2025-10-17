@@ -93,6 +93,7 @@ protected:
 
         [[nodiscard]] bool try_hotswap(tr_block_index_t /*block*/, tr_peer const* /*peer*/) override
         {
+            // Ignore hotswaps in tests
             return false;
         }
 

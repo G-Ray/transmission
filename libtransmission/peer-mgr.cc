@@ -1044,23 +1044,25 @@ bool tr_swarm::WishlistMediator::try_hotswap(tr_block_index_t block, tr_peer con
         }
     }
 
-    // If we found a victim and it's significantly slower,
-    // we can hotswap the block to the current peer
-    if (victim != nullptr && peer_speed > (victim_speed * 2))
+    // If we didn't find a victim, or if the new peer isn't
+    // significantly faster, don't hotswap.
+    if (victim == nullptr || peer_speed <= (victim_speed * 2))
     {
-        tr_logAddDebug(fmt::format(
-            "Hotswapping block {} from slow peer {} ({} KB/s) to faster peer {} ({} KB/s)",
-            block,
-            victim->display_name(),
-            victim_speed.count(Speed::Units::KByps),
-            peer->display_name(),
-            peer_speed.count(Speed::Units::KByps)));
-
-        victim->maybe_cancel_block_request(block);
-        return true;
+        return false;
     }
 
-    return false;
+    tr_logAddDebug(fmt::format(
+        "Hotswapping block {} from slow peer {} ({} KB/s) to faster peer {} ({} KB/s)",
+        block,
+        victim->display_name(),
+        victim_speed.count(Speed::Units::KByps),
+        peer->display_name(),
+        peer_speed.count(Speed::Units::KByps)));
+
+    // hotswap
+    victim->maybe_cancel_block_request(block);
+
+    return true;
 }
 
 libtransmission::ObserverTag tr_swarm::WishlistMediator::observe_peer_disconnect(

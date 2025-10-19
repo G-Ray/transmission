@@ -20,6 +20,7 @@
 #include "libtransmission/crypto-utils.h" // for tr_salt_shaker
 #include "libtransmission/tr-macros.h"
 #include "libtransmission/peer-mgr-wishlist.h"
+#include "libtransmission/log.h"
 
 // Asserts in this file are expensive, so hide them in #ifdef
 #ifdef TR_WISHLIST_ASSERT
@@ -113,6 +114,7 @@ public:
     explicit Impl(Mediator& mediator_in);
 
     [[nodiscard]] std::vector<tr_block_span_t> next(
+        tr_peer const* peer,
         size_t n_wanted_blocks,
         std::function<bool(tr_piece_index_t)> const& peer_has_piece,
         std::function<bool(tr_block_index_t)> const& has_active_request_to_peer);
@@ -460,6 +462,7 @@ Wishlist::Impl::Impl(Mediator& mediator_in)
 }
 
 std::vector<tr_block_span_t> Wishlist::Impl::next(
+    tr_peer const* peer,
     size_t n_wanted_blocks,
     std::function<bool(tr_piece_index_t)> const& peer_has_piece,
     std::function<bool(tr_block_index_t)> const& has_active_request_to_peer)
@@ -503,16 +506,20 @@ std::vector<tr_block_span_t> Wishlist::Impl::next(
                 fmt::format("piece = {}, block = {}, n_req = {}, truth = {}", candidate.piece, block, n_req, n_req_truth));
 #endif
 
-            // don't request from too many peers
-            if (n_req >= max_peers)
-            {
-                continue;
-            }
-
             // don't request block from peers which we already requested from
             if (has_active_request_to_peer(block))
             {
                 continue;
+            }
+
+            // don't request from too many peers,
+            // except if we have a successful hotswap
+            if (!mediator_.is_sequential_download() || !mediator_.try_hotswap(block, peer))
+            {
+                if (n_req >= max_peers)
+                {
+                    continue;
+                }
             }
 
             blocks.emplace_back(block);
@@ -560,9 +567,10 @@ Wishlist::Wishlist(Mediator& mediator_in)
 Wishlist::~Wishlist() = default;
 
 std::vector<tr_block_span_t> Wishlist::next(
+    tr_peer const* peer,
     size_t n_wanted_blocks,
     std::function<bool(tr_piece_index_t)> const& peer_has_piece,
     std::function<bool(tr_block_index_t)> const& has_active_pending_to_peer)
 {
-    return impl_->next(n_wanted_blocks, peer_has_piece, has_active_pending_to_peer);
+    return impl_->next(peer, n_wanted_blocks, peer_has_piece, has_active_pending_to_peer);
 }

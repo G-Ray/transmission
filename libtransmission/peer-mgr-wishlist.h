@@ -43,6 +43,7 @@ public:
         [[nodiscard]] virtual tr_block_span_t block_span(tr_piece_index_t piece) const = 0;
         [[nodiscard]] virtual tr_piece_index_t piece_count() const = 0;
         [[nodiscard]] virtual tr_priority_t priority(tr_piece_index_t piece) const = 0;
+        [[nodiscard]] virtual bool try_hotswap(tr_block_index_t block, tr_peer const* peer) = 0;
 
         [[nodiscard]] virtual libtransmission::ObserverTag observe_peer_disconnect(
             libtransmission::SimpleObservable<tr_torrent*, tr_bitfield const&, tr_bitfield const&>::Observer observer) = 0;
@@ -82,6 +83,7 @@ public:
 
     // the next blocks that we should request from a peer
     [[nodiscard]] std::vector<tr_block_span_t> next(
+        tr_peer const* peer,
         size_t n_wanted_blocks,
         std::function<bool(tr_piece_index_t)> const& peer_has_piece,
         std::function<bool(tr_block_index_t)> const& has_active_pending_to_peer);

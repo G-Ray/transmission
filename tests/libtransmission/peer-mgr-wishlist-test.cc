@@ -91,6 +91,12 @@ protected:
             return piece_priority_[piece];
         }
 
+        [[nodiscard]] bool try_hotswap(tr_block_index_t /*block*/, tr_peer const* /*peer*/) override
+        {
+            // Ignore hotswaps in tests
+            return false;
+        }
+
         [[nodiscard]] libtransmission::ObserverTag observe_peer_disconnect(
             libtransmission::SimpleObservable<tr_torrent*, tr_bitfield const&, tr_bitfield const&>::Observer observer) override
         {
@@ -222,7 +228,7 @@ TEST_F(PeerMgrWishlistTest, doesNotRequestPiecesThatAreNotWanted)
 
     // we should only get the first piece back
     auto wishlist = Wishlist{ mediator };
-    auto const spans = wishlist.next(1000, PeerHasAllPieces, ClientHasNoActiveRequests);
+    auto const spans = wishlist.next(nullptr, 1000, PeerHasAllPieces, ClientHasNoActiveRequests);
     ASSERT_EQ(1U, std::size(spans));
     EXPECT_EQ(mediator.block_span_[0].begin, spans[0].begin);
     EXPECT_EQ(mediator.block_span_[0].end, spans[0].end);
@@ -257,7 +263,7 @@ TEST_F(PeerMgrWishlistTest, onlyRequestBlocksThePeerHas)
 
     // even if we ask wishlist for more blocks than what the peer has,
     // it should only return blocks [100..200)
-    auto const spans = Wishlist{ mediator }.next(250, IsPieceOne, ClientHasNoActiveRequests);
+    auto const spans = Wishlist{ mediator }.next(nullptr, 250, IsPieceOne, ClientHasNoActiveRequests);
     auto requested = tr_bitfield{ 250 };
     for (auto const& span : spans)
     {
@@ -298,7 +304,7 @@ TEST_F(PeerMgrWishlistTest, doesNotRequestSameBlockTwiceFromSamePeer)
 
     // even if we ask wishlist for all the blocks,
     // it should omit blocks [0..10) from the return set
-    auto const spans = Wishlist{ mediator }.next(250, PeerHasAllPieces, IsBetweenZeroToTen);
+    auto const spans = Wishlist{ mediator }.next(nullptr, 250, PeerHasAllPieces, IsBetweenZeroToTen);
     auto requested = tr_bitfield{ 250 };
     for (auto const& span : spans)
     {
@@ -337,7 +343,7 @@ TEST_F(PeerMgrWishlistTest, doesNotRequestDupesWhenNotInEndgame)
 
     // even if we ask wishlist for all the blocks,
     // it should omit blocks [0..10) from the return set
-    auto const spans = Wishlist{ mediator }.next(250, PeerHasAllPieces, ClientHasNoActiveRequests);
+    auto const spans = Wishlist{ mediator }.next(nullptr, 250, PeerHasAllPieces, ClientHasNoActiveRequests);
     auto requested = tr_bitfield{ 250 };
     for (auto const& span : spans)
     {
@@ -384,11 +390,11 @@ TEST_F(PeerMgrWishlistTest, onlyRequestsDupesDuringEndgame)
 
     // the endgame state takes effect after it runs out of
     // blocks for the first time, so we trigger it here
-    (void)wishlist.next(1000, PeerHasAllPieces, ClientHasNoActiveRequests);
+    (void)wishlist.next(nullptr, 1000, PeerHasAllPieces, ClientHasNoActiveRequests);
 
     // if we ask wishlist for more blocks than exist,
     // it should omit blocks [5..10) from the return set
-    auto const spans = wishlist.next(1000, PeerHasAllPieces, ClientHasNoActiveRequests);
+    auto const spans = wishlist.next(nullptr, 1000, PeerHasAllPieces, ClientHasNoActiveRequests);
     auto requested = tr_bitfield{ 250 };
     for (auto const& span : spans)
     {
@@ -425,7 +431,7 @@ TEST_F(PeerMgrWishlistTest, sequentialDownload)
         // we enabled sequential download
         mediator.is_sequential_download_ = true;
 
-        return Wishlist{ mediator }.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return Wishlist{ mediator }.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // when we ask for blocks, apart from the last piece,
@@ -494,7 +500,7 @@ TEST_F(PeerMgrWishlistTest, sequentialDownloadFromPiece)
         mediator.is_sequential_download_ = true;
         mediator.sequential_download_from_piece_ = 2;
 
-        return Wishlist{ mediator }.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return Wishlist{ mediator }.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // when we ask for blocks, apart from the last piece,
@@ -546,7 +552,7 @@ TEST_F(PeerMgrWishlistTest, doesNotRequestTooManyBlocks)
     // but we only ask for 10 blocks,
     // so that's how many we should get back
     auto const n_wanted = 10U;
-    auto const spans = Wishlist{ mediator }.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+    auto const spans = Wishlist{ mediator }.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     auto n_got = size_t{};
     for (auto const& span : spans)
     {
@@ -581,7 +587,7 @@ TEST_F(PeerMgrWishlistTest, prefersHighPriorityPieces)
         // and the second piece is high priority
         mediator.piece_priority_[1] = TR_PRI_HIGH;
 
-        return Wishlist{ mediator }.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return Wishlist{ mediator }.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // wishlist should pick the high priority piece's blocks first.
@@ -642,7 +648,7 @@ TEST_F(PeerMgrWishlistTest, prefersNearlyCompletePieces)
             }
         }
 
-        return Wishlist{ mediator }.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return Wishlist{ mediator }.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // wishlist prefers to get pieces completed ASAP, so it
@@ -705,7 +711,7 @@ TEST_F(PeerMgrWishlistTest, prefersRarerPieces)
         mediator.piece_replication_[1] = 3;
         mediator.piece_replication_[2] = 2;
 
-        return Wishlist{ mediator }.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return Wishlist{ mediator }.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // wishlist prefers to request rarer pieces, so it
@@ -770,7 +776,7 @@ TEST_F(PeerMgrWishlistTest, peerDisconnectDecrementsReplication)
 
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // a peer that has only the first piece disconnected, now the
         // first piece should be the rarest piece according to the cache
@@ -781,7 +787,7 @@ TEST_F(PeerMgrWishlistTest, peerDisconnectDecrementsReplication)
         // this is what a real mediator should return at this point:
         // mediator.piece_replication_[0] = 1;
 
-        return wishlist.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // wishlist prefers to request rarer pieces, so it
@@ -849,13 +855,13 @@ TEST_F(PeerMgrWishlistTest, gotBadPieceRebuildsWishlist)
 
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // piece 1 turns out to be corrupted
         got_bad_piece_.emit(nullptr, 1);
         mediator.client_has_piece_.erase(1);
 
-        return wishlist.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // The wishlist should consider piece 1 missing, so it will request
@@ -920,7 +926,7 @@ TEST_F(PeerMgrWishlistTest, gotBitfieldIncrementsReplication)
 
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // a peer with first 2 pieces connected and sent a bitfield, now the
         // third piece should be the rarest piece according to the cache
@@ -932,7 +938,7 @@ TEST_F(PeerMgrWishlistTest, gotBitfieldIncrementsReplication)
         // mediator.piece_replication_[0] = 3;
         // mediator.piece_replication_[1] = 3;
 
-        return wishlist.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // wishlist prefers to request rarer pieces, so it
@@ -996,14 +1002,14 @@ TEST_F(PeerMgrWishlistTest, gotBlockResortsPiece)
 
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // we received block 0 from someone, the wishlist should resort the
         // candidate list cache by consulting the mediator
         mediator.client_has_block_.insert(0);
         got_block_.emit(nullptr, 0);
 
-        return wishlist.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // wishlist prefers to get pieces completed ASAP, so it
@@ -1067,7 +1073,7 @@ TEST_F(PeerMgrWishlistTest, gotHaveIncrementsReplication)
 
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // a peer sent a "Have" message for the first piece, now the
         // first piece should be the least rare piece according to the cache
@@ -1076,7 +1082,7 @@ TEST_F(PeerMgrWishlistTest, gotHaveIncrementsReplication)
         // this is what a real mediator should return at this point:
         // mediator.piece_replication_[0] = 3;
 
-        return wishlist.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // wishlist prefers to request rarer pieces, so it
@@ -1146,14 +1152,14 @@ TEST_F(PeerMgrWishlistTest, gotChokeDecrementsActiveRequest)
 
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // a peer sent a "Choke" message, which cancels some active requests
         tr_bitfield requested{ 300 };
         requested.set_span(0, 10);
         got_choke_.emit(nullptr, requested);
 
-        return wishlist.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // wishlist only picks blocks with no active requests when not in
@@ -1202,7 +1208,7 @@ TEST_F(PeerMgrWishlistTest, gotHaveAllDoesNotAffectOrder)
 
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // a peer sent a "Have All" message, this should not affect the piece order
         got_have_all_.emit(nullptr);
@@ -1212,7 +1218,7 @@ TEST_F(PeerMgrWishlistTest, gotHaveAllDoesNotAffectOrder)
         // mediator.piece_replication_[1] = 3;
         // mediator.piece_replication_[2] = 4;
 
-        return wishlist.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // wishlist prefers to request rarer pieces, so it
@@ -1281,7 +1287,7 @@ TEST_F(PeerMgrWishlistTest, gotRejectDecrementsActiveRequest)
 
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // a peer sent some "Reject" messages, which cancels active requests
         auto rejected_set = std::set<tr_block_index_t>{};
@@ -1296,7 +1302,8 @@ TEST_F(PeerMgrWishlistTest, gotRejectDecrementsActiveRequest)
             got_reject_.emit(nullptr, nullptr, block);
         }
 
-        return std::pair{ wishlist.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests), std::move(rejected_bitfield) };
+        return std::pair{ wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests),
+                          std::move(rejected_bitfield) };
     };
 
     // wishlist only picks blocks with no active requests when not in
@@ -1353,7 +1360,7 @@ TEST_F(PeerMgrWishlistTest, sentCancelDecrementsActiveRequest)
 
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // a peer sent some "Reject" messages, which cancels active requests
         auto cancelled_set = std::set<tr_block_index_t>{};
@@ -1368,7 +1375,8 @@ TEST_F(PeerMgrWishlistTest, sentCancelDecrementsActiveRequest)
             sent_cancel_.emit(nullptr, nullptr, block);
         }
 
-        return std::pair{ wishlist.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests), std::move(cancelled_bitfield) };
+        return std::pair{ wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests),
+                          std::move(cancelled_bitfield) };
     };
 
     // wishlist only picks blocks with no active requests when not in
@@ -1419,12 +1427,12 @@ TEST_F(PeerMgrWishlistTest, sentRequestIncrementsActiveRequests)
 
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // we sent "Request" messages
         sent_request_.emit(nullptr, nullptr, { 0, 120 });
 
-        return wishlist.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // wishlist only picks blocks with no active requests when not in
@@ -1471,7 +1479,7 @@ TEST_F(PeerMgrWishlistTest, doesNotRequestPieceAfterPieceCompleted)
     // allow the wishlist to build its cache, it should have all 3 pieces
     // at this point
     auto wishlist = Wishlist{ mediator };
-    (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+    (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
     // we just completed piece 0
     mediator.client_has_piece_.insert(0);
@@ -1479,7 +1487,7 @@ TEST_F(PeerMgrWishlistTest, doesNotRequestPieceAfterPieceCompleted)
 
     // receiving a "piece_completed" signal removes the piece from the
     // wishlist's cache, its blocks should not be in the return set.
-    auto const spans = wishlist.next(10, PeerHasAllPieces, ClientHasNoActiveRequests);
+    auto const spans = wishlist.next(nullptr, 10, PeerHasAllPieces, ClientHasNoActiveRequests);
     auto requested = tr_bitfield{ 300 };
     for (auto const& span : spans)
     {
@@ -1515,14 +1523,14 @@ TEST_F(PeerMgrWishlistTest, settingPriorityRebuildsWishlist)
 
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // a file priority changed, the cache should be rebuilt.
         // let's say the file was in piece 1
         mediator.piece_priority_[1] = TR_PRI_HIGH;
         priority_changed_.emit(nullptr, nullptr, 0U, TR_PRI_HIGH);
 
-        return wishlist.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // wishlist should pick the high priority piece's blocks first.
@@ -1571,14 +1579,14 @@ TEST_F(PeerMgrWishlistTest, settingSequentialDownloadRebuildsWishlist)
 
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // the sequential download setting was changed,
         // the cache should be rebuilt
         mediator.is_sequential_download_ = true;
         sequential_download_changed_.emit(nullptr, true);
 
-        return wishlist.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return wishlist.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // we should get pieces in sequential order when we ask for blocks,
@@ -1645,14 +1653,14 @@ TEST_F(PeerMgrWishlistTest, sequentialDownloadFromPieceRebuildsWishlist)
         // allow the wishlist to build its cache
         auto wishlist = Wishlist{ mediator };
         mediator.is_sequential_download_ = true;
-        (void)wishlist.next(1, PeerHasAllPieces, ClientHasNoActiveRequests);
+        (void)wishlist.next(nullptr, 1, PeerHasAllPieces, ClientHasNoActiveRequests);
 
         // we enabled sequential download, from piece 2
         mediator.sequential_download_from_piece_ = 2;
 
         // the sequential download setting was changed,
         // the cache should be rebuilt
-        return Wishlist{ mediator }.next(n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
+        return Wishlist{ mediator }.next(nullptr, n_wanted, PeerHasAllPieces, ClientHasNoActiveRequests);
     };
 
     // when we ask for blocks, apart from the last piece,

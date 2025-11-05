@@ -2103,11 +2103,16 @@ size_t tr_peerMsgsImpl::max_available_reqs() const
     // use this desired rate to figure out how
     // many requests we should send to this peer
     static auto constexpr Floor = size_t{ 32 };
+    // In sequential mode, use a small floor to prevent
+    // slow peers slowing down too many blocks
+    static auto constexpr SequentialFloor = size_t{ 2 };
     static size_t constexpr Seconds = RequestBufSecs;
     size_t const estimated_blocks_in_period = (rate.base_quantity() * Seconds) / tr_block_info::BlockSize;
     auto const ceil = peer_reqq_.value_or(PeerReqQDefault);
 
-    return std::clamp(estimated_blocks_in_period, Floor, ceil);
+    auto const floor = tor_.is_sequential_download() ? SequentialFloor : Floor;
+
+    return std::clamp(estimated_blocks_in_period, floor, ceil);
 }
 
 } // namespace

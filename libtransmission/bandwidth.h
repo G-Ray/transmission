@@ -80,7 +80,7 @@ struct tr_bandwidth
 private:
     using Speed = libtransmission::Values::Speed;
 
-    static constexpr auto HistoryMSec = 2000U;
+    static constexpr auto HistoryMSec = 5000U;
     static constexpr auto GranularityMSec = 250U;
     static constexpr auto HistorySize = HistoryMSec / GranularityMSec;
 

@@ -161,11 +161,11 @@ Request arguments:
 | `seedRatioLimit`                 | double   | torrent-level seeding ratio
 | `seedRatioMode`                  | number   | which ratio to use. See tr_ratiolimit
 | `sequential_download`            | boolean  | download torrent pieces sequentially
-| `sequential_download_from_piece` | number   | download from a specific piece when sequential download is enabled
-| `trackerAdd`                     | array    | **DEPRECATED** use `trackerList` instead
+| `sequential_download_from_piece` | boolean  | download from a specific piece when sequential download is enabled
+| `trackerAdd`                     | array    | **DEPRECATED** use trackerList instead
 | `trackerList`                    | string   | string of announce URLs, one per line, and a blank line between [tiers](https://www.bittorrent.org/beps/bep_0012.html).
-| `trackerRemove`                  | array    | **DEPRECATED** use `trackerList` instead
-| `trackerReplace`                 | array    | **DEPRECATED** use `trackerList` instead
+| `trackerRemove`                  | array    | **DEPRECATED** use trackerList instead
+| `trackerReplace`                 | array    | **DEPRECATED** use trackerList instead
 | `uploadLimit`                    | number   | maximum upload speed (kB/s)
 | `uploadLimited`                  | boolean  | true if `uploadLimit` is honored
 
@@ -479,7 +479,7 @@ Request arguments:
 | `priority-low`                   | array     | indices of low-priority file(s)
 | `priority-normal`                | array     | indices of normal-priority file(s)
 | `sequential_download`            | boolean   | download torrent pieces sequentially
-| `sequential_download_from_piece` | number    | download from a specific piece when sequential download is enabled
+| `sequential_download_from_piece` | boolean   | download from a specific piece when sequential download is enabled
 
 Either `filename` **or** `metainfo` **must** be included. All other arguments are optional.
 

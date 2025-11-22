@@ -1094,8 +1094,9 @@ bool tr_swarm::WishlistMediator::try_hotswap(tr_block_index_t block, tr_peer con
     auto victim_speed = Speed{};
 
     // Find the slowest peer (victim) that has this requested block
-    for (auto* const p : swarm_.peers)
+    for (auto const& peer_ptr : swarm_.peers)
     {
+        auto* const p = peer_ptr.get();
         if (p == peer || !p->active_requests.test(block))
         {
             continue;

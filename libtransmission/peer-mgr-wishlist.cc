@@ -18,6 +18,9 @@
 
 #include "libtransmission/bitfield.h"
 #include "libtransmission/crypto-utils.h" // for tr_salt_shaker
+#include "libtransmission/log.h"
+#include "libtransmission/peer-common.h"
+#include "libtransmission/peer-msgs.h"
 #include "libtransmission/tr-macros.h"
 #include "libtransmission/peer-mgr-wishlist.h"
 
@@ -487,8 +490,123 @@ std::vector<tr_block_span_t> Wishlist::Impl::next(
         return {};
     }
 
+    // Check if this is a slow peer needing filtering (used in sequential mode only)
+    using Speed = libtransmission::Values::Speed;
+    auto const now_msec = tr_time_msec();
+    auto const peer_speed = peer->get_piece_speed(now_msec, TR_PEER_TO_CLIENT);
+    auto const is_slow_peer = peer_speed < Speed{ tr_block_info::BlockSize * 3, Speed::Units::Byps };
+    auto const is_very_slow_peer = peer_speed <= Speed{ tr_block_info::BlockSize, Speed::Units::Byps };
+    auto const is_sequential = mediator_.is_sequential_download();
+
+    // Calculate aggregate fast peer capacity (blocks per second)
+    auto total_speed = Speed{};
+
+    if (is_sequential && is_slow_peer)
+    {
+        for (auto const& other_peer_ptr : mediator_.peers())
+        {
+            auto const other_speed = other_peer_ptr->get_piece_speed(now_msec, TR_PEER_TO_CLIENT);
+            total_speed += other_speed;
+        }
+    }
+
+    // Convert speed to blocks per second capacity
+    auto const fast_peer_block_capacity = (total_speed.base_quantity() / tr_block_info::BlockSize);
+
+    // Track blocks assigned to fast peers in this cycle
+    auto blocks_assigned_to_fast_peers = size_t{ 0 };
+    auto blocks_skipped_by_speedranker = size_t{ 0 };
+
     auto blocks = small::vector<tr_block_index_t>{};
     blocks.reserve(n_wanted_blocks);
+
+    // Very slow peers (< 1 block/s) get last available block if fast peers exist
+    // This minimizes their impact on the sequential download
+    auto const should_assign_last_block = is_sequential && is_very_slow_peer && total_speed > Speed{};
+
+    // if (should_assign_last_block)
+    // {
+    //     // Iterate candidates from end to beginning to find the last (furthest) available block
+    //     for (auto it = candidates_.rbegin(); it != candidates_.rend(); ++it)
+    //     {
+    //         auto const& candidate = *it;
+
+    //         if (candidate.replication == 0 || !peer_has_piece(candidate.piece))
+    //         {
+    //             continue;
+    //         }
+
+    //         // Get the last unrequested block
+    //         if (!candidate.unrequested.empty())
+    //         {
+    //             auto const last_block = *candidate.unrequested.begin();
+    //             blocks.emplace_back(last_block);
+
+    //             tr_logAddDebug(fmt::format(
+    //                 "SpeedRanker: Very slow peer {} ({} KB/s) assigned last available block {} to minimize impact",
+    //                 peer->display_name(),
+    //                 peer_speed.count(libtransmission::Values::Speed::Units::KByps),
+    //                 last_block));
+
+    //             // std::sort(std::begin(blocks), std::end(blocks));
+    //             return make_spans(blocks);
+    //         }
+    //     }
+    // }
+
+    // Track whether we've hit the first unrequested block (stop hotswapping after that)
+    auto stop_hotswapping = false;
+
+    // Hotswap slow requests until we hit an unrequested block
+    if (is_sequential)
+    {
+        for (auto const& candidate : candidates_)
+        {
+            // do we have enough?
+            if (std::size(blocks) >= n_wanted_blocks)
+            {
+                break;
+            }
+
+            // if the peer doesn't have this piece that we want...
+            if (candidate.replication == 0 || !peer_has_piece(candidate.piece))
+            {
+                continue;
+            }
+
+            if (!stop_hotswapping)
+            {
+                for (auto block = candidate.block_span.begin; block < candidate.block_span.end; ++block)
+                {
+                    if (std::size(blocks) >= n_wanted_blocks)
+                    {
+                        break;
+                    }
+
+                    // If we hit an unrequested block, stop hotswapping
+                    // This optimization prevent hotswapping too much
+                    if (candidate.unrequested.count(block) > 0)
+                    {
+                        stop_hotswapping = true;
+                        break;
+                    }
+
+                    // Skip if already downloaded
+                    if (mediator_.client_has_block(block))
+                    {
+                        continue;
+                    }
+
+                    // This block is currently being requested by someone - try to hotswap
+                    if (mediator_.try_hotswap(block, peer))
+                    {
+                        blocks.emplace_back(block);
+                    }
+                }
+            }
+        }
+    }
+
     for (auto const& candidate : candidates_)
     {
         // do we have enough?
@@ -503,30 +621,6 @@ std::vector<tr_block_span_t> Wishlist::Impl::next(
             continue;
         }
 
-        // In sequential download mode, try to hotswap blocks that are already requested by slower peers
-        if (mediator_.is_sequential_download())
-        {
-            for (auto block = candidate.block_span.begin; block < candidate.block_span.end; ++block)
-            {
-                if (std::size(blocks) >= n_wanted_blocks)
-                {
-                    break;
-                }
-
-                // Skip if block is unrequested (already handled below) or already downloaded
-                if (candidate.unrequested.count(block) > 0 || mediator_.client_has_block(block))
-                {
-                    continue;
-                }
-
-                // This block is currently being requested by someone - try to hotswap
-                if (mediator_.try_hotswap(block, peer))
-                {
-                    blocks.emplace_back(block);
-                }
-            }
-        }
-
         // walk the blocks in this piece that we don't have or not requested
         for (auto it = std::rbegin(candidate.unrequested), end = std::rend(candidate.unrequested); it != end; ++it)
         {
@@ -535,8 +629,38 @@ std::vector<tr_block_span_t> Wishlist::Impl::next(
                 break;
             }
 
-            blocks.emplace_back(*it);
+            auto const block = *it;
+
+            // SpeedRanker: Block-level capacity filtering for slow peers
+            if (is_sequential && is_slow_peer)
+            {
+                // Check if fast peers have capacity for this block
+                if (blocks_assigned_to_fast_peers < fast_peer_block_capacity)
+                {
+                    // Fast peers can handle this block
+                    blocks_assigned_to_fast_peers++;
+                    blocks_skipped_by_speedranker++;
+                    continue; // Skip this block, let faster peers handle it
+                }
+                // Fast peers at max capacity - let slow peer request this block
+            }
+
+            blocks.emplace_back(block);
         }
+    }
+
+    // Log summary for slow peers if blocks were skipped
+    if (blocks_skipped_by_speedranker > 0)
+    {
+        auto const first_assigned_block = !blocks.empty() ? fmt::format("{}", blocks.front()) : "none";
+        tr_logAddDebug(fmt::format(
+            "SpeedRanker: Slow peer {} ({} KB/s) skipped {} blocks, assigned {} blocks starting at block {} (fast peer capacity: {} blocks/s)",
+            peer->display_name(),
+            peer_speed.count(libtransmission::Values::Speed::Units::KByps),
+            blocks_skipped_by_speedranker,
+            std::size(blocks),
+            first_assigned_block,
+            fast_peer_block_capacity));
     }
 
     // Ensure the list of blocks are sorted

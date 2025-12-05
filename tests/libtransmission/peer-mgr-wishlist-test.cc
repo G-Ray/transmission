@@ -13,6 +13,7 @@
 #include <libtransmission/transmission.h>
 
 #include <libtransmission/bitfield.h>
+#include <libtransmission/block-info.h>
 #include <libtransmission/crypto-utils.h>
 #include <libtransmission/peer-mgr-wishlist.h>
 
@@ -176,6 +177,12 @@ protected:
             libtransmission::SimpleObservable<tr_torrent*, tr_piece_index_t>::Observer observer) override
         {
             return parent_.sequential_download_from_piece_changed_.observe(std::move(observer));
+        }
+
+        [[nodiscard]] std::vector<std::shared_ptr<tr_peerMsgs>> const& peers() const override
+        {
+            static std::vector<std::shared_ptr<tr_peerMsgs>> const empty_peers;
+            return empty_peers; // Return empty list for tests
         }
     };
 

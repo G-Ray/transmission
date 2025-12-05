@@ -2136,10 +2136,8 @@ size_t tr_peerMsgsImpl::max_available_reqs() const
     auto const is_sequential = tor_.is_sequential_download();
     size_t const seconds = is_sequential ? RequestBufSecsSequential : RequestBufSecs;
 
-    // Use a lower floor in sequential mode to avoid over-requesting from slow peers.
-    // We use 3 to target at least 3 blocks per seconds. 3 * block size is
-    // the speed for which a peer is considered fast enough in try_hotswap
-    size_t const floor = is_sequential ? size_t{ 3 } : size_t{ 32 };
+    // Use a lower floor in sequential mode
+    size_t const floor = is_sequential ? size_t{ 1 } : size_t{ 32 };
 
     size_t const estimated_blocks_in_period = (rate.base_quantity() * seconds) / tr_block_info::BlockSize;
     auto const ceil = peer_reqq_.value_or(PeerReqQDefault);

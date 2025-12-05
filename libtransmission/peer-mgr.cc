@@ -395,6 +395,8 @@ public:
         [[nodiscard]] tr_priority_t priority(tr_piece_index_t piece) const override;
         [[nodiscard]] bool try_hotswap(tr_block_index_t block, tr_peer const* peer) const override;
 
+        [[nodiscard]] std::vector<std::shared_ptr<tr_peerMsgs>> const& peers() const override;
+
         [[nodiscard]] libtransmission::ObserverTag observe_files_wanted_changed(
             libtransmission::SimpleObservable<tr_torrent*, tr_file_index_t const*, tr_file_index_t, bool>::Observer observer)
             override;
@@ -1068,9 +1070,7 @@ tr_priority_t tr_swarm::WishlistMediator::priority(tr_piece_index_t piece) const
 
 bool tr_swarm::WishlistMediator::try_hotswap(tr_block_index_t block, tr_peer const* peer) const
 {
-    /* Define slow and fast speed thresholds
-     * Values are extracted from webtorrent.
-     * We will consider hotswapping:
+    /* We will consider hotswapping:
      * - if the current peer is faster than slow threshold
      * - if the current block is requested by a peer slower than fast threshold */
     static auto slow_speed_threshold = Speed{ tr_block_info::BlockSize, Speed::Units::Byps };
@@ -1135,6 +1135,11 @@ bool tr_swarm::WishlistMediator::try_hotswap(tr_block_index_t block, tr_peer con
     victim->maybe_cancel_block_request(block);
 
     return true;
+}
+
+std::vector<std::shared_ptr<tr_peerMsgs>> const& tr_swarm::WishlistMediator::peers() const
+{
+    return swarm_.peers;
 }
 
 libtransmission::ObserverTag tr_swarm::WishlistMediator::observe_files_wanted_changed(
@@ -2604,8 +2609,26 @@ namespace bandwidth_helpers
 {
 void pumpAllPeers(tr_peerMgr* mgr)
 {
+    auto const now = tr_time_msec();
+
     for (auto* const tor : mgr->torrents_)
     {
+        // Sort peers by speed (fastest first) for sequential downloads
+        // This will allow slow peers to be affected block at the end of
+        // the fast peers requests pipeline.
+        if (tor->is_sequential_download())
+        {
+            std::sort(
+                std::begin(tor->swarm->peers),
+                std::end(tor->swarm->peers),
+                [now](auto const& a, auto const& b)
+                {
+                    auto const speed_a = a->get_piece_speed(now, TR_PEER_TO_CLIENT);
+                    auto const speed_b = b->get_piece_speed(now, TR_PEER_TO_CLIENT);
+                    return speed_b < speed_a;
+                });
+        }
+
         for (auto const& peer : tor->swarm->peers)
         {
             peer->pulse();

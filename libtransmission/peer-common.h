@@ -20,6 +20,7 @@
 #include "libtransmission/block-info.h"
 #include "libtransmission/history.h"
 #include "libtransmission/net.h" // tr_port
+#include "libtransmission/values.h" // for Speed
 
 /**
  * @addtogroup peers Peers

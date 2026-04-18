@@ -22,7 +22,7 @@
 
 #include "test-fixtures.h"
 
-using SettingsTest = ::libtransmission::test::TransmissionTest;
+using SettingsTest = ::tr::test::TransmissionTest;
 using namespace std::literals;
 
 TEST_F(SettingsTest, canInstantiate)
@@ -112,14 +112,15 @@ TEST_F(SettingsTest, canLoadEncryptionMode)
 TEST_F(SettingsTest, canSaveEncryptionMode)
 {
     static auto constexpr Key = TR_KEY_encryption;
-    static auto constexpr ExpectedValue = TR_ENCRYPTION_REQUIRED;
+    static auto constexpr SourceValue = TR_ENCRYPTION_REQUIRED;
+    static auto constexpr ExpectedValue = "required"sv;
 
     auto settings = tr_session::Settings{};
-    EXPECT_NE(ExpectedValue, settings.seed_queue_enabled);
-    settings.encryption_mode = ExpectedValue;
+    EXPECT_NE(SourceValue, settings.seed_queue_enabled);
+    settings.encryption_mode = SourceValue;
 
     auto const map = settings.save();
-    auto const val = map.value_if<int64_t>(Key);
+    auto const val = map.value_if<std::string_view>(Key);
     ASSERT_TRUE(val);
     EXPECT_EQ(ExpectedValue, *val);
 }
@@ -204,13 +205,29 @@ TEST_F(SettingsTest, canLoadPort)
 
     auto settings = tr_session::Settings{};
     auto const default_value = settings.peer_port;
-    auto constexpr ExpectedValue = tr_port::from_host(8080);
+    static auto constexpr ExpectedValue = tr_port::from_host(8080);
     ASSERT_NE(ExpectedValue, default_value);
 
     auto map = tr_variant::Map{ 1U };
     map.try_emplace(Key, ExpectedValue.host());
-    settings.load(tr_variant{ std::move(map) });
+    settings.load(std::move(map));
     EXPECT_EQ(ExpectedValue, settings.peer_port);
+
+    static auto constexpr TooLargeValue = 0x10000;
+    EXPECT_NE(TooLargeValue, default_value.host());
+    settings = tr_session::Settings{};
+    map = tr_variant::Map{ 1U };
+    map.insert_or_assign(Key, TooLargeValue);
+    settings.load(std::move(map));
+    EXPECT_EQ(default_value, settings.peer_port);
+
+    static auto constexpr TooSmallValue = -1;
+    EXPECT_NE(TooSmallValue, default_value.host());
+    settings = tr_session::Settings{};
+    map = tr_variant::Map{ 1U };
+    map.insert_or_assign(Key, TooSmallValue);
+    settings.load(std::move(map));
+    EXPECT_EQ(default_value, settings.peer_port);
 }
 
 TEST_F(SettingsTest, canSavePort)
@@ -271,12 +288,22 @@ TEST_F(SettingsTest, canLoadSizeT)
     static auto constexpr Key = TR_KEY_queue_stalled_minutes;
 
     auto settings = tr_session::Settings{};
-    auto const expected_value = settings.queue_stalled_minutes + 5U;
+    auto const default_value = settings.queue_stalled_minutes;
+    auto const expected_value = default_value + 5U;
+    EXPECT_NE(expected_value, default_value);
 
     auto map = tr_variant::Map{ 1U };
     map.try_emplace(Key, expected_value);
-    settings.load(tr_variant{ std::move(map) });
+    settings.load(std::move(map));
     EXPECT_EQ(expected_value, settings.queue_stalled_minutes);
+
+    static auto constexpr NegValue = -1;
+    EXPECT_NE(default_value, NegValue);
+    settings = tr_session::Settings{};
+    map = tr_variant::Map{ 1U };
+    map.insert_or_assign(Key, NegValue);
+    settings.load(std::move(map));
+    EXPECT_EQ(default_value, settings.queue_stalled_minutes);
 }
 
 TEST_F(SettingsTest, canSaveSizeT)
@@ -389,11 +416,11 @@ TEST_F(SettingsTest, canSaveDiffServ)
     auto settings = tr_session::Settings{};
     ASSERT_NE(ChangedValue, settings.peer_socket_diffserv);
 
-    settings.peer_socket_diffserv = tr_diffserv_t(0x20);
+    settings.peer_socket_diffserv = ChangedValue;
     auto const map = settings.save();
     auto const val = map.value_if<std::string_view>(Key);
     ASSERT_TRUE(val);
-    EXPECT_EQ(ChangedValue.toString(), *val);
+    EXPECT_EQ("cs1"sv, *val);
 }
 
 TEST_F(SettingsTest, canLoadVerify)

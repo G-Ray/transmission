@@ -7,12 +7,15 @@
 #include <cerrno>
 #include <cstddef> // size_t
 #include <cstdint> // int64_t
+#include <limits>
 #include <map>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+#include <gtest/gtest.h>
 
 #define LIBTRANSMISSION_VARIANT_MODULE
 
@@ -24,7 +27,7 @@
 
 #include "test-fixtures.h"
 
-using VariantTest = ::libtransmission::test::TransmissionTest;
+using VariantTest = ::tr::test::TransmissionTest;
 using namespace std::literals;
 
 namespace
@@ -97,6 +100,53 @@ TEST_F(VariantTest, getType)
     EXPECT_EQ(strkey, *sv);
 }
 
+template<typename T>
+using VariantIntTest = ::testing::Test;
+using TestTypes = ::testing::Types<int8_t, uint8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t>;
+TYPED_TEST_SUITE(VariantIntTest, TestTypes);
+
+TYPED_TEST(VariantIntTest, getIntTypes)
+{
+    auto v = tr_variant{};
+    auto const test = [&v](auto const expected)
+    {
+        v = expected;
+        if (std::cmp_greater_equal(expected, std::numeric_limits<TypeParam>::lowest()) &&
+            std::cmp_less_equal(expected, std::numeric_limits<TypeParam>::max()))
+        {
+            EXPECT_EQ(expected, v.value_if<TypeParam>());
+        }
+        else
+        {
+            EXPECT_EQ(std::nullopt, v.value_if<TypeParam>());
+        }
+    };
+
+    test(0);
+    test(-1);
+    test(30);
+    test(std::numeric_limits<int8_t>::lowest());
+    test(std::numeric_limits<int8_t>::lowest() - int16_t{ 1 });
+    test(std::numeric_limits<int8_t>::max());
+    test(std::numeric_limits<int8_t>::max() + int16_t{ 1 });
+    test(std::numeric_limits<int16_t>::lowest());
+    test(std::numeric_limits<int16_t>::lowest() - int32_t{ 1 });
+    test(std::numeric_limits<int16_t>::max());
+    test(std::numeric_limits<int16_t>::max() + int32_t{ 1 });
+    test(std::numeric_limits<int32_t>::lowest());
+    test(std::numeric_limits<int32_t>::lowest() - int64_t{ 1 });
+    test(std::numeric_limits<int32_t>::max());
+    test(std::numeric_limits<int32_t>::max() + int64_t{ 1 });
+    test(std::numeric_limits<int64_t>::lowest());
+    test(std::numeric_limits<int64_t>::max());
+    test(std::numeric_limits<uint8_t>::max());
+    test(std::numeric_limits<uint8_t>::max() + uint16_t{ 1 });
+    test(std::numeric_limits<uint16_t>::max());
+    test(std::numeric_limits<uint16_t>::max() + uint32_t{ 1 });
+    test(std::numeric_limits<uint32_t>::max());
+    test(std::numeric_limits<uint32_t>::max() + uint64_t{ 1 });
+}
+
 TEST_F(VariantTest, mergeStringsTakesOwnership)
 {
     auto const is_equal_string = [](std::string_view const a, std::string_view const b)
@@ -140,7 +190,7 @@ TEST_F(VariantTest, parseInt)
     static auto constexpr ExpectVal = int64_t{ 64 };
 
     auto benc = Benc;
-    auto const value = transmission::benc::impl::ParseInt(&benc);
+    auto const value = tr::benc::impl::ParseInt(&benc);
     ASSERT_TRUE(value);
     EXPECT_EQ(ExpectVal, *value);
     EXPECT_EQ(std::data(Benc) + std::size(Benc), std::data(benc));
@@ -151,7 +201,7 @@ TEST_F(VariantTest, parseIntWithMissingEnd)
     static auto constexpr Benc = "i64"sv;
 
     auto benc = Benc;
-    EXPECT_FALSE(transmission::benc::impl::ParseInt(&benc));
+    EXPECT_FALSE(tr::benc::impl::ParseInt(&benc));
     EXPECT_EQ(std::data(Benc), std::data(benc));
 }
 
@@ -160,7 +210,7 @@ TEST_F(VariantTest, parseIntEmptyBuffer)
     static auto constexpr Benc = ""sv;
 
     auto benc = Benc;
-    EXPECT_FALSE(transmission::benc::impl::ParseInt(&benc));
+    EXPECT_FALSE(tr::benc::impl::ParseInt(&benc));
     EXPECT_EQ(std::data(Benc), std::data(benc));
 }
 
@@ -169,7 +219,7 @@ TEST_F(VariantTest, parseIntWithBadDigits)
     static auto constexpr Benc = "i6z4e"sv;
 
     auto benc = Benc;
-    EXPECT_FALSE(transmission::benc::impl::ParseInt(&benc));
+    EXPECT_FALSE(tr::benc::impl::ParseInt(&benc));
     EXPECT_EQ(std::data(Benc), std::data(benc));
 }
 
@@ -179,7 +229,7 @@ TEST_F(VariantTest, parseNegativeInt)
     static auto constexpr Expected = int64_t{ -3 };
 
     auto benc = Benc;
-    auto const value = transmission::benc::impl::ParseInt(&benc);
+    auto const value = tr::benc::impl::ParseInt(&benc);
     ASSERT_TRUE(value);
     EXPECT_EQ(Expected, *value);
     EXPECT_EQ(std::data(Benc) + std::size(Benc), std::data(benc));
@@ -190,7 +240,7 @@ TEST_F(VariantTest, parseNegativeWithLeadingZero)
     static auto constexpr Benc = "i-03e"sv;
 
     auto benc = Benc;
-    EXPECT_FALSE(transmission::benc::impl::ParseInt(&benc));
+    EXPECT_FALSE(tr::benc::impl::ParseInt(&benc));
     EXPECT_EQ(std::data(Benc), std::data(benc));
 }
 
@@ -200,7 +250,7 @@ TEST_F(VariantTest, parseIntZero)
     static auto constexpr Expected = int64_t{ 0 };
 
     auto benc = Benc;
-    auto const value = transmission::benc::impl::ParseInt(&benc);
+    auto const value = tr::benc::impl::ParseInt(&benc);
     ASSERT_TRUE(value);
     EXPECT_EQ(Expected, *value);
     EXPECT_EQ(std::data(Benc) + std::size(Benc), std::data(benc));
@@ -211,13 +261,13 @@ TEST_F(VariantTest, parseIntWithLeadingZero)
     static auto constexpr Benc = "i04e"sv;
 
     auto benc = Benc;
-    EXPECT_FALSE(transmission::benc::impl::ParseInt(&benc));
+    EXPECT_FALSE(tr::benc::impl::ParseInt(&benc));
     EXPECT_EQ(std::data(Benc), std::data(benc));
 }
 
 TEST_F(VariantTest, str)
 {
-    using namespace transmission::benc::impl;
+    using namespace tr::benc::impl;
 
     // string len is designed to overflow
     auto benc = "99999999999999999999:boat"sv;
@@ -735,7 +785,7 @@ TEST_F(VariantTest, visitsNodesDepthFirst)
         node.visit(
             [&](auto const& val)
             {
-                using ValueType = std::decay_t<decltype(val)>;
+                using ValueType = std::remove_cvref_t<decltype(val)>;
 
                 if constexpr (
                     std::is_same_v<ValueType, bool> || //

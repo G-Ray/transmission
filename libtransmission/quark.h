@@ -155,6 +155,7 @@ enum // NOLINT(performance-enum-size)
     TR_KEY_download_limit_camel_APICOMPAT,
     TR_KEY_download_limited_camel_APICOMPAT,
     TR_KEY_download_speed_camel_APICOMPAT,
+    TR_KEY_download_bytes_per_second,
     TR_KEY_download_count,
     TR_KEY_download_dir,
     TR_KEY_download_dir_free_space,
@@ -263,6 +264,8 @@ enum // NOLINT(performance-enum-size)
     TR_KEY_info,
     TR_KEY_inhibit_desktop_hibernation_kebab_APICOMPAT,
     TR_KEY_inhibit_desktop_hibernation,
+    TR_KEY_ip_endpoints_ipv4,
+    TR_KEY_ip_endpoints_ipv6,
     TR_KEY_ip_protocol,
     TR_KEY_ipv4,
     TR_KEY_ipv6,
@@ -276,6 +279,7 @@ enum // NOLINT(performance-enum-size)
     TR_KEY_is_utp_camel_APICOMPAT,
     TR_KEY_is_uploading_to_camel_APICOMPAT,
     TR_KEY_is_backup,
+    TR_KEY_is_downloading,
     TR_KEY_is_downloading_from,
     TR_KEY_is_encrypted,
     TR_KEY_is_finished,
@@ -487,7 +491,7 @@ enum // NOLINT(performance-enum-size)
     TR_KEY_remote_session_password,
     TR_KEY_remote_session_port,
     TR_KEY_remote_session_requires_authentication,
-    TR_KEY_remote_session_rpc_url_path,
+    TR_KEY_remote_session_url_base_path,
     TR_KEY_remote_session_username,
     TR_KEY_removed,
     TR_KEY_rename_partial_files_kebab_APICOMPAT,
@@ -581,38 +585,22 @@ enum // NOLINT(performance-enum-size)
     TR_KEY_session_id,
     TR_KEY_session_set,
     TR_KEY_session_stats,
-    TR_KEY_show_active_kebab_APICOMPAT,
-    TR_KEY_show_all_kebab_APICOMPAT,
     TR_KEY_show_backup_trackers_kebab_APICOMPAT,
-    TR_KEY_show_downloading_kebab_APICOMPAT,
-    TR_KEY_show_error_kebab_APICOMPAT,
     TR_KEY_show_extra_peer_details_kebab_APICOMPAT,
     TR_KEY_show_filterbar_kebab_APICOMPAT,
-    TR_KEY_show_finished_kebab_APICOMPAT,
     TR_KEY_show_notification_area_icon_kebab_APICOMPAT,
     TR_KEY_show_options_window_kebab_APICOMPAT,
-    TR_KEY_show_paused_kebab_APICOMPAT,
-    TR_KEY_show_seeding_kebab_APICOMPAT,
     TR_KEY_show_statusbar_kebab_APICOMPAT,
     TR_KEY_show_toolbar_kebab_APICOMPAT,
     TR_KEY_show_tracker_scrapes_kebab_APICOMPAT,
-    TR_KEY_show_verifying_kebab_APICOMPAT,
-    TR_KEY_show_active,
-    TR_KEY_show_all,
     TR_KEY_show_backup_trackers,
-    TR_KEY_show_downloading,
-    TR_KEY_show_error,
     TR_KEY_show_extra_peer_details,
     TR_KEY_show_filterbar,
-    TR_KEY_show_finished,
     TR_KEY_show_notification_area_icon,
     TR_KEY_show_options_window,
-    TR_KEY_show_paused,
-    TR_KEY_show_seeding,
     TR_KEY_show_statusbar,
     TR_KEY_show_toolbar,
     TR_KEY_show_tracker_scrapes,
-    TR_KEY_show_verifying,
     TR_KEY_sitename,
     TR_KEY_size_bytes_kebab_APICOMPAT,
     TR_KEY_size_units_kebab_APICOMPAT,
@@ -623,28 +611,8 @@ enum // NOLINT(performance-enum-size)
     TR_KEY_sleep_per_seconds_during_verify_kebab_APICOMPAT,
     TR_KEY_sleep_per_seconds_during_verify,
     TR_KEY_socket_address,
-    TR_KEY_sort_by_activity_kebab_APICOMPAT,
-    TR_KEY_sort_by_age_kebab_APICOMPAT,
-    TR_KEY_sort_by_eta_kebab_APICOMPAT,
-    TR_KEY_sort_by_id_kebab_APICOMPAT,
-    TR_KEY_sort_by_name_kebab_APICOMPAT,
-    TR_KEY_sort_by_progress_kebab_APICOMPAT,
-    TR_KEY_sort_by_queue_kebab_APICOMPAT,
-    TR_KEY_sort_by_ratio_kebab_APICOMPAT,
-    TR_KEY_sort_by_size_kebab_APICOMPAT,
-    TR_KEY_sort_by_state_kebab_APICOMPAT,
     TR_KEY_sort_mode_kebab_APICOMPAT,
     TR_KEY_sort_reversed_kebab_APICOMPAT,
-    TR_KEY_sort_by_activity,
-    TR_KEY_sort_by_age,
-    TR_KEY_sort_by_eta,
-    TR_KEY_sort_by_id,
-    TR_KEY_sort_by_name,
-    TR_KEY_sort_by_progress,
-    TR_KEY_sort_by_queue,
-    TR_KEY_sort_by_ratio,
-    TR_KEY_sort_by_size,
-    TR_KEY_sort_by_state,
     TR_KEY_sort_mode,
     TR_KEY_sort_reversed,
     TR_KEY_source,
@@ -757,6 +725,7 @@ enum // NOLINT(performance-enum-size)
     TR_KEY_uploaded_ever_camel_APICOMPAT,
     TR_KEY_uploaded_bytes,
     TR_KEY_uploaded_ever,
+    TR_KEY_url,
     TR_KEY_url_list,
     TR_KEY_use_global_speed_limit_kebab_APICOMPAT,
     TR_KEY_use_speed_limit_kebab_APICOMPAT,
@@ -778,6 +747,7 @@ enum // NOLINT(performance-enum-size)
     TR_KEY_watch_dir_force_generic,
     TR_KEY_webseeds,
     TR_KEY_webseeds_sending_to_us_camel_APICOMPAT,
+    TR_KEY_webseeds_ex,
     TR_KEY_webseeds_sending_to_us,
     TR_KEY_yourip,
     TR_N_KEYS
@@ -788,6 +758,7 @@ enum // NOLINT(performance-enum-size)
  *
  * @return true if the specified string exists as a quark
  */
+[[nodiscard]] std::optional<tr_quark> tr_quark_lookup(std::u8string_view key);
 [[nodiscard]] std::optional<tr_quark> tr_quark_lookup(std::string_view key);
 
 /**
@@ -796,10 +767,12 @@ enum // NOLINT(performance-enum-size)
  * Note: this view is guaranteed to be zero-terminated at view[std::size(view)]
  */
 [[nodiscard]] std::string_view tr_quark_get_string_view(tr_quark quark);
+[[nodiscard]] std::u8string_view tr_quark_get_u8string_view(tr_quark quark);
 
 /**
  * Create a new quark for the specified string. If a quark already
  * exists for that string, it is returned so that no duplicates are
  * created.
  */
+[[nodiscard]] tr_quark tr_quark_new(std::u8string_view str);
 [[nodiscard]] tr_quark tr_quark_new(std::string_view str);

@@ -24,6 +24,7 @@
 
 #include "libtransmission/api-compat.h"
 #include "libtransmission/error.h"
+#include "libtransmission/file-utils.h"
 #include "libtransmission/log.h"
 #include "libtransmission/quark.h"
 #include "libtransmission/tr-assert.h"
@@ -83,61 +84,8 @@ template<typename T>
 
 // ---
 
-// Specialisations for int64_t and bool could have been inline and constexpr,
-// but aren't because https://gcc.gnu.org/bugzilla/show_bug.cgi?id=85282
-
 template<>
-[[nodiscard]] std::optional<int64_t> tr_variant::value_if() noexcept
-{
-    switch (index())
-    {
-    case IntIndex:
-        return *get_if<IntIndex>();
-
-    case BoolIndex:
-        return *get_if<BoolIndex>() ? 1 : 0;
-
-    default:
-        return {};
-    }
-}
-
-template<>
-[[nodiscard]] std::optional<bool> tr_variant::value_if() noexcept
-{
-    switch (index())
-    {
-    case BoolIndex:
-        return *get_if<BoolIndex>();
-
-    case IntIndex:
-        if (auto const val = *get_if<IntIndex>(); val == 0 || val == 1)
-        {
-            return val != 0;
-        }
-        break;
-
-    case StringIndex:
-    case StringViewIndex:
-        if (auto const val = value_if<std::string_view>(); val == "true"sv)
-        {
-            return true;
-        }
-        else if (val == "false"sv)
-        {
-            return false;
-        }
-        break;
-
-    default:
-        break;
-    }
-
-    return {};
-}
-
-template<>
-[[nodiscard]] std::optional<double> tr_variant::value_if() noexcept
+[[nodiscard]] std::optional<double> tr_variant::value_if() const noexcept
 {
     switch (index())
     {
@@ -162,22 +110,6 @@ template<>
     return {};
 }
 
-template<>
-[[nodiscard]] std::optional<std::string_view> tr_variant::value_if() noexcept
-{
-    switch (index())
-    {
-    case StringIndex:
-        return *std::get_if<std::string>(&val_);
-
-    case StringViewIndex:
-        return *std::get_if<std::string_view>(&val_);
-
-    default:
-        return {};
-    }
-}
-
 // ---
 
 tr_variant tr_variant::clone() const
@@ -192,7 +124,7 @@ tr_variant& tr_variant::merge(tr_variant const& that)
     that.visit(
         [this](auto const& value)
         {
-            using ValueType = std::decay_t<decltype(value)>;
+            using ValueType = std::remove_cvref_t<decltype(value)>;
 
             if constexpr (
                 std::is_same_v<ValueType, std::monostate> || std::is_same_v<ValueType, std::nullptr_t> ||
@@ -264,7 +196,7 @@ bool tr_variantListRemove(tr_variant* const var, size_t pos)
     if (auto* const vec = var != nullptr ? var->get_if<tr_variant::VectorIndex>() : nullptr;
         vec != nullptr && pos < std::size(*vec))
     {
-        vec->erase(std::begin(*vec) + pos);
+        vec->erase(std::begin(*vec) + static_cast<tr_variant::Vector::difference_type>(pos));
         return true;
     }
 

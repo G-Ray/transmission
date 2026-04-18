@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <ranges>
 #include <string_view>
 #include <utility>
 
@@ -35,57 +36,30 @@
 #include "Session.h"
 
 #include "AddData.h"
-#include "CustomVariantType.h"
 #include "Filters.h"
 #include "Prefs.h"
+#include "QtCompat.h"
 #include "RpcQueue.h"
 #include "SessionDialog.h"
 #include "Torrent.h"
+#include "UserMetaType.h"
 #include "VariantHelpers.h"
 
 using namespace std::literals;
 
-using ::libtransmission::serializer::to_value;
-using ::libtransmission::serializer::to_variant;
+using ::tr::serializer::to_variant;
 using ::trqt::variant_helpers::dictAdd;
 using ::trqt::variant_helpers::dictFind;
-using ::trqt::variant_helpers::getValue;
 
 /***
 ****
 ***/
 
-void Session::sessionSet(tr_quark const key, QVariant const& value)
+void Session::sessionSet(tr_quark const key, tr_variant val)
 {
-    tr_variant args;
+    auto args = tr_variant{};
     tr_variantInitDict(&args, 1);
-
-#if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)
-    switch (value.typeId())
-#else
-    switch (static_cast<QMetaType::Type>(value.type()))
-#endif
-    {
-    case QMetaType::Bool:
-        dictAdd(&args, key, value.toBool());
-        break;
-
-    case QMetaType::Int:
-        dictAdd(&args, key, value.toInt());
-        break;
-
-    case QMetaType::Double:
-        dictAdd(&args, key, value.toDouble());
-        break;
-
-    case QMetaType::QString:
-        dictAdd(&args, key, value.toString());
-        break;
-
-    default:
-        assert(false);
-    }
-
+    *tr_variantDictAdd(&args, key) = std::move(val);
     exec(TR_KEY_session_set, &args);
 }
 
@@ -162,7 +136,7 @@ void Session::copyMagnetLinkToClipboard(int torrent_id)
 
 void Session::updatePref(int key)
 {
-    if (prefs_.isCore(key))
+    if (Prefs::isCore(key))
     {
         switch (key)
         {
@@ -182,6 +156,7 @@ void Session::updatePref(int key)
         case Prefs::DOWNLOAD_QUEUE_SIZE:
         case Prefs::DSPEED:
         case Prefs::DSPEED_ENABLED:
+        case Prefs::ENCRYPTION:
         case Prefs::IDLE_LIMIT:
         case Prefs::IDLE_LIMIT_ENABLED:
         case Prefs::INCOMPLETE_DIR:
@@ -204,48 +179,33 @@ void Session::updatePref(int key)
         case Prefs::USPEED:
         case Prefs::USPEED_ENABLED:
         case Prefs::UTP_ENABLED:
-            sessionSet(prefs_.getKey(key), prefs_.variant(key));
+            {
+                auto [pref_key, pref_val] = prefs_.keyval(key);
+                sessionSet(pref_key, std::move(pref_val));
+            }
             break;
 
         case Prefs::DOWNLOAD_DIR:
-            sessionSet(prefs_.getKey(key), prefs_.variant(key));
+            {
+                auto [pref_key, pref_val] = prefs_.keyval(key);
+                sessionSet(pref_key, std::move(pref_val));
+            }
             /* this will change the 'freespace' argument, so refresh */
             refreshSessionInfo();
             break;
 
         case Prefs::RATIO:
-            sessionSet(TR_KEY_seed_ratio_limit, prefs_.variant(key));
+            sessionSet(TR_KEY_seed_ratio_limit, prefs_.keyval(key).second);
             break;
 
         case Prefs::RATIO_ENABLED:
-            sessionSet(TR_KEY_seed_ratio_limited, prefs_.variant(key));
-            break;
-
-        case Prefs::ENCRYPTION:
-            switch (int const i = prefs_.variant(key).toInt(); i)
-            {
-            case 0:
-                sessionSet(prefs_.getKey(key), QStringLiteral("tolerated"));
-                break;
-
-            case 1:
-                sessionSet(prefs_.getKey(key), QStringLiteral("preferred"));
-                break;
-
-            case 2:
-                sessionSet(prefs_.getKey(key), QStringLiteral("required"));
-                break;
-
-            default:
-                break;
-            }
-
+            sessionSet(TR_KEY_seed_ratio_limited, prefs_.keyval(key).second);
             break;
 
         case Prefs::RPC_AUTH_REQUIRED:
             if (session_ != nullptr)
             {
-                tr_sessionSetRPCPasswordEnabled(session_, prefs_.getBool(key));
+                tr_sessionSetRPCPasswordEnabled(session_, prefs_.get<bool>(key));
             }
 
             break;
@@ -253,7 +213,7 @@ void Session::updatePref(int key)
         case Prefs::RPC_ENABLED:
             if (session_ != nullptr)
             {
-                tr_sessionSetRPCEnabled(session_, prefs_.getBool(key));
+                tr_sessionSetRPCEnabled(session_, prefs_.get<bool>(key));
             }
 
             break;
@@ -261,7 +221,7 @@ void Session::updatePref(int key)
         case Prefs::RPC_PASSWORD:
             if (session_ != nullptr)
             {
-                tr_sessionSetRPCPassword(session_, prefs_.getString(key).toUtf8().constData());
+                tr_sessionSetRPCPassword(session_, prefs_.get<QString>(key).toStdString());
             }
 
             break;
@@ -269,7 +229,7 @@ void Session::updatePref(int key)
         case Prefs::RPC_PORT:
             if (session_ != nullptr)
             {
-                tr_sessionSetRPCPort(session_, static_cast<uint16_t>(prefs_.getInt(key)));
+                tr_sessionSetRPCPort(session_, static_cast<uint16_t>(prefs_.get<int>(key)));
             }
 
             break;
@@ -277,7 +237,7 @@ void Session::updatePref(int key)
         case Prefs::RPC_USERNAME:
             if (session_ != nullptr)
             {
-                tr_sessionSetRPCUsername(session_, prefs_.getString(key).toUtf8().constData());
+                tr_sessionSetRPCUsername(session_, prefs_.get<QString>(key).toStdString());
             }
 
             break;
@@ -285,7 +245,7 @@ void Session::updatePref(int key)
         case Prefs::RPC_WHITELIST_ENABLED:
             if (session_ != nullptr)
             {
-                tr_sessionSetRPCWhitelistEnabled(session_, prefs_.getBool(key));
+                tr_sessionSetRPCWhitelistEnabled(session_, prefs_.get<bool>(key));
             }
 
             break;
@@ -293,7 +253,7 @@ void Session::updatePref(int key)
         case Prefs::RPC_WHITELIST:
             if (session_ != nullptr)
             {
-                tr_sessionSetRPCWhitelist(session_, prefs_.getString(key).toUtf8().constData());
+                tr_sessionSetRPCWhitelist(session_, prefs_.get<QString>(key).toStdString());
             }
 
             break;
@@ -308,9 +268,10 @@ void Session::updatePref(int key)
 ****
 ***/
 
-Session::Session(QString config_dir, Prefs& prefs)
+Session::Session(QString config_dir, Prefs& prefs, RpcClient& rpc)
     : config_dir_{ std::move(config_dir) }
     , prefs_{ prefs }
+    , rpc_{ rpc }
 {
     connect(&prefs_, &Prefs::changed, this, &Session::updatePref);
     connect(&rpc_, &RpcClient::httpAuthenticationRequired, this, &Session::httpAuthenticationRequired);
@@ -363,7 +324,11 @@ void Session::start()
         }
         url.setHost(prefs_.get<QString>(Prefs::SESSION_REMOTE_HOST));
         url.setPort(prefs_.get<int>(Prefs::SESSION_REMOTE_PORT));
-        url.setPath(prefs_.get<QString>(Prefs::SESSION_REMOTE_RPC_URL_PATH));
+
+        auto const root_path = prefs_.get<QString>(Prefs::SESSION_REMOTE_URL_BASE_PATH);
+        auto const relative_path = TrHttpServerRpcRelativePath;
+        url.setPath(
+            root_path + QString::fromUtf8(relative_path.data(), static_cast<IF_QT6(qsizetype, int)>(relative_path.size())));
 
         if (prefs_.get<bool>(Prefs::SESSION_REMOTE_AUTH))
         {
@@ -606,6 +571,7 @@ using TorrentProperties = Session::TorrentProperties;
                 TR_KEY_peers_connected,
                 TR_KEY_peers_getting_from_us,
                 TR_KEY_peers_sending_to_us,
+                TR_KEY_percent_complete,
                 TR_KEY_percent_done,
                 TR_KEY_primary_mime_type,
                 TR_KEY_queue_position,
@@ -618,6 +584,7 @@ using TorrentProperties = Session::TorrentProperties;
                 TR_KEY_status,
                 TR_KEY_total_size,
                 TR_KEY_trackers,
+                TR_KEY_upload_ratio,
                 TR_KEY_uploaded_ever,
                 TR_KEY_webseeds_sending_to_us,
             };
@@ -655,6 +622,7 @@ using TorrentProperties = Session::TorrentProperties;
                 TR_KEY_peers_connected,
                 TR_KEY_peers_getting_from_us,
                 TR_KEY_peers_sending_to_us,
+                TR_KEY_percent_complete,
                 TR_KEY_percent_done,
                 TR_KEY_queue_position,
                 TR_KEY_rate_download,
@@ -664,6 +632,7 @@ using TorrentProperties = Session::TorrentProperties;
                 TR_KEY_seed_ratio_mode,
                 TR_KEY_size_when_done,
                 TR_KEY_status,
+                TR_KEY_upload_ratio,
                 TR_KEY_uploaded_ever,
                 TR_KEY_webseeds_sending_to_us,
             };
@@ -688,11 +657,7 @@ void Session::refreshTorrents(torrent_ids_t const& torrent_ids, TorrentPropertie
     auto fields = tr_variant::Vector{};
     auto const keys = getKeys(props);
     fields.reserve(std::size(keys));
-    std::transform(
-        std::begin(keys),
-        std::end(keys),
-        std::back_inserter(fields),
-        [](auto key) { return tr_variant::unmanaged_string(key); });
+    std::ranges::transform(keys, std::back_inserter(fields), [](auto key) { return tr_variant::unmanaged_string(key); });
 
     auto map = tr_variant::Map{ 3U };
     map.try_emplace(TR_KEY_format, tr_variant::unmanaged_string("table"sv));
@@ -852,46 +817,30 @@ RpcResponseFuture Session::exec(tr_quark method, tr_variant* args)
     return rpc_.exec(method, args);
 }
 
-void Session::updateStats(tr_variant* args_dict, tr_session_stats* stats)
+void Session::updateStats(tr_variant const& args_dict, tr_session_stats& stats)
 {
-    if (auto const value = dictFind<uint64_t>(args_dict, TR_KEY_uploaded_bytes))
-    {
-        stats->uploadedBytes = *value;
-    }
+    static constexpr auto Fields = std::tuple{
+        tr::serializer::Field<&tr_session_stats::downloadedBytes>{ TR_KEY_downloaded_bytes },
+        tr::serializer::Field<&tr_session_stats::filesAdded>{ TR_KEY_files_added },
+        tr::serializer::Field<&tr_session_stats::secondsActive>{ TR_KEY_seconds_active },
+        tr::serializer::Field<&tr_session_stats::sessionCount>{ TR_KEY_session_count },
+        tr::serializer::Field<&tr_session_stats::uploadedBytes>{ TR_KEY_uploaded_bytes },
+    };
+    tr::serializer::load(stats, Fields, args_dict);
 
-    if (auto const value = dictFind<uint64_t>(args_dict, TR_KEY_downloaded_bytes))
-    {
-        stats->downloadedBytes = *value;
-    }
-
-    if (auto const value = dictFind<uint64_t>(args_dict, TR_KEY_files_added))
-    {
-        stats->filesAdded = *value;
-    }
-
-    if (auto const value = dictFind<uint64_t>(args_dict, TR_KEY_session_count))
-    {
-        stats->sessionCount = *value;
-    }
-
-    if (auto const value = dictFind<uint64_t>(args_dict, TR_KEY_seconds_active))
-    {
-        stats->secondsActive = *value;
-    }
-
-    stats->ratio = static_cast<float>(tr_getRatio(stats->uploadedBytes, stats->downloadedBytes));
+    stats.ratio = static_cast<float>(tr_getRatio(stats.uploadedBytes, stats.downloadedBytes));
 }
 
 void Session::updateStats(tr_variant* dict)
 {
     if (tr_variant* var = nullptr; tr_variantDictFindDict(dict, TR_KEY_current_stats, &var))
     {
-        updateStats(var, &stats_);
+        updateStats(*var, stats_);
     }
 
     if (tr_variant* var = nullptr; tr_variantDictFindDict(dict, TR_KEY_cumulative_stats, &var))
     {
-        updateStats(var, &cumulative_stats_);
+        updateStats(*var, cumulative_stats_);
     }
 
     emit statsUpdated();
@@ -903,87 +852,14 @@ void Session::updateInfo(tr_variant* args_dict)
 
     for (int i = Prefs::FIRST_CORE_PREF; i <= Prefs::LAST_CORE_PREF; ++i)
     {
-        tr_variant const* b(tr_variantDictFind(args_dict, prefs_.getKey(i)));
+        auto const pref_key = prefs_.keyval(i).first;
+        tr_variant const* b(tr_variantDictFind(args_dict, pref_key));
 
         if (b == nullptr)
         {
             continue;
         }
-
-        if (i == Prefs::ENCRYPTION)
-        {
-            if (auto const str = getValue<QString>(b); str)
-            {
-                if (*str == QStringLiteral("required"))
-                {
-                    prefs_.set(i, 2);
-                }
-                else if (*str == QStringLiteral("preferred"))
-                {
-                    prefs_.set(i, 1);
-                }
-                else if (*str == QStringLiteral("tolerated"))
-                {
-                    prefs_.set(i, 0);
-                }
-            }
-
-            continue;
-        }
-
-        switch (prefs_.type(i))
-        {
-        case QMetaType::Int:
-            if (auto const value = getValue<int>(b); value)
-            {
-                prefs_.set(i, *value);
-            }
-
-            break;
-
-        case QMetaType::Double:
-            if (auto const value = getValue<double>(b); value)
-            {
-                prefs_.set(i, *value);
-            }
-
-            break;
-
-        case QMetaType::Bool:
-            if (auto const value = getValue<bool>(b); value)
-            {
-                prefs_.set(i, *value);
-            }
-
-            break;
-
-        case CustomVariantType::ShowModeType:
-            if (auto const val = to_value<ShowMode>(*b))
-            {
-                prefs_.set(i, *val);
-            }
-
-            break;
-
-        case CustomVariantType::SortModeType:
-            if (auto const val = to_value<SortMode>(*b))
-            {
-                prefs_.set(i, *val);
-            }
-
-            break;
-
-        case QMetaType::QString:
-            if (auto const value = getValue<QString>(b); value)
-            {
-                prefs_.set(i, *value);
-            }
-
-            break;
-
-        default:
-            break;
-        }
+        prefs_.set(i, *b);
     }
 
     if (auto const b = dictFind<bool>(args_dict, TR_KEY_seed_ratio_limited))
@@ -1001,11 +877,11 @@ void Session::updateInfo(tr_variant* args_dict)
     {
         prefs_.set(Prefs::RPC_ENABLED, tr_sessionIsRPCEnabled(session_));
         prefs_.set(Prefs::RPC_AUTH_REQUIRED, tr_sessionIsRPCPasswordEnabled(session_));
-        prefs_.set(Prefs::RPC_PASSWORD, QString::fromUtf8(tr_sessionGetRPCPassword(session_)));
+        prefs_.set(Prefs::RPC_PASSWORD, QString::fromStdString(tr_sessionGetRPCPassword(session_)));
         prefs_.set(Prefs::RPC_PORT, tr_sessionGetRPCPort(session_));
-        prefs_.set(Prefs::RPC_USERNAME, QString::fromUtf8(tr_sessionGetRPCUsername(session_)));
+        prefs_.set(Prefs::RPC_USERNAME, QString::fromStdString(tr_sessionGetRPCUsername(session_)));
         prefs_.set(Prefs::RPC_WHITELIST_ENABLED, tr_sessionGetRPCWhitelistEnabled(session_));
-        prefs_.set(Prefs::RPC_WHITELIST, QString::fromUtf8(tr_sessionGetRPCWhitelist(session_)));
+        prefs_.set(Prefs::RPC_WHITELIST, QString::fromStdString(tr_sessionGetRPCWhitelist(session_)));
     }
 
     if (auto const size = dictFind<int>(args_dict, TR_KEY_blocklist_size); size && *size != blocklistSize())
@@ -1040,14 +916,14 @@ void Session::setBlocklistSize(int64_t i)
     emit blocklistUpdated(i);
 }
 
-void Session::addTorrent(AddData add_me, tr_variant* args_dict)
+void Session::addTorrent(AddData const& add_me, tr_variant* args_dict)
 {
     assert(tr_variantDictFind(args_dict, TR_KEY_filename) == nullptr);
     assert(tr_variantDictFind(args_dict, TR_KEY_metainfo) == nullptr);
 
     if (tr_variantDictFind(args_dict, TR_KEY_paused) == nullptr)
     {
-        dictAdd(args_dict, TR_KEY_paused, !prefs_.getBool(Prefs::START));
+        dictAdd(args_dict, TR_KEY_paused, !prefs_.get<bool>(Prefs::START));
     }
 
     switch (add_me.type)
@@ -1114,7 +990,7 @@ void Session::onDuplicatesTimer()
     duplicates.swap(duplicates_);
 
     QStringList lines;
-    for (auto [dupe, original] : duplicates)
+    for (auto const& [dupe, original] : duplicates)
     {
         lines.push_back(tr("%1 (copy of %2)").arg(dupe).arg(original.left(7)));
     }
@@ -1122,9 +998,11 @@ void Session::onDuplicatesTimer()
     if (!lines.empty())
     {
         lines.sort(Qt::CaseInsensitive);
-        auto const title = tr("Duplicate Torrent(s)", "", lines.size());
+        // NOLINTNEXTLINE(readability-redundant-casting): Remove this comment when we drop Qt5
+        auto const title = tr("Duplicate Torrent(s)", "", static_cast<int>(lines.size()));
         auto const detail = lines.join(QStringLiteral("\n"));
-        auto const detail_text = tr("Unable to add %n duplicate torrent(s)", "", lines.size());
+        // NOLINTNEXTLINE(readability-redundant-casting): Remove this comment when we drop Qt5
+        auto const detail_text = tr("Unable to add %n duplicate torrent(s)", "", static_cast<int>(lines.size()));
         auto const use_detail = lines.size() > 1;
         auto const text = use_detail ? detail_text : detail;
 
@@ -1139,11 +1017,11 @@ void Session::onDuplicatesTimer()
     }
 }
 
-void Session::addTorrent(AddData add_me)
+void Session::addTorrent(AddData const& add_me)
 {
     tr_variant args;
     tr_variantInitDict(&args, 3);
-    addTorrent(std::move(add_me), &args);
+    addTorrent(add_me, &args);
 }
 
 void Session::addNewlyCreatedTorrent(QString const& filename, QString const& local_path)
@@ -1153,7 +1031,7 @@ void Session::addNewlyCreatedTorrent(QString const& filename, QString const& loc
     tr_variant args;
     tr_variantInitDict(&args, 3);
     dictAdd(&args, TR_KEY_download_dir, local_path);
-    dictAdd(&args, TR_KEY_paused, !prefs_.getBool(Prefs::START));
+    dictAdd(&args, TR_KEY_paused, !prefs_.get<bool>(Prefs::START));
     dictAdd(&args, TR_KEY_metainfo, b64);
 
     exec(TR_KEY_torrent_add, &args);
@@ -1207,13 +1085,17 @@ void Session::launchWebInterface() const
     if (session_ == nullptr) // remote session
     {
         url = rpc_.url();
-        url.setPath(QStringLiteral("/transmission/web/"));
+
+        auto const root_path = prefs_.get<QString>(Prefs::SESSION_REMOTE_URL_BASE_PATH);
+        auto const relative_path = TrHttpServerWebRelativePath;
+        url.setPath(
+            root_path + QString::fromUtf8(relative_path.data(), static_cast<IF_QT6(qsizetype, int)>(relative_path.size())));
     }
     else // local session
     {
         url.setScheme(QStringLiteral("http"));
         url.setHost(QStringLiteral("localhost"));
-        url.setPort(prefs_.getInt(Prefs::RPC_PORT));
+        url.setPort(prefs_.get<int>(Prefs::RPC_PORT));
     }
 
     QDesktopServices::openUrl(url);

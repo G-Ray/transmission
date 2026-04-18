@@ -9,6 +9,7 @@
 #include <cstddef> // size_t
 #include <cstdint> // int64_t
 #include <functional> // std::invoke
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -19,7 +20,6 @@
 
 #include "libtransmission/error.h"
 #include "libtransmission/quark.h"
-#include "libtransmission/tr-macros.h" // TR_CONSTEXPR20
 
 /**
  * A variant that holds typical benc/json types: bool, int,
@@ -56,61 +56,61 @@ public:
             vec_.reserve(n_reserve);
         }
 
-        [[nodiscard]] TR_CONSTEXPR20 auto begin() noexcept
+        [[nodiscard]] constexpr auto begin() noexcept
         {
             return std::begin(vec_);
         }
 
-        [[nodiscard]] TR_CONSTEXPR20 auto begin() const noexcept
+        [[nodiscard]] constexpr auto begin() const noexcept
         {
             return std::cbegin(vec_);
         }
 
-        [[nodiscard]] TR_CONSTEXPR20 auto cbegin() const noexcept
+        [[nodiscard]] constexpr auto cbegin() const noexcept
         {
             return std::cbegin(vec_);
         }
 
-        [[nodiscard]] TR_CONSTEXPR20 auto end() noexcept
+        [[nodiscard]] constexpr auto end() noexcept
         {
             return std::end(vec_);
         }
 
-        [[nodiscard]] TR_CONSTEXPR20 auto end() const noexcept
+        [[nodiscard]] constexpr auto end() const noexcept
         {
             return std::cend(vec_);
         }
 
-        [[nodiscard]] TR_CONSTEXPR20 auto cend() const noexcept
+        [[nodiscard]] constexpr auto cend() const noexcept
         {
             return std::cend(vec_);
         }
 
-        [[nodiscard]] TR_CONSTEXPR20 auto find(tr_quark const key) noexcept
+        [[nodiscard]] constexpr auto find(tr_quark const key) noexcept
         {
             auto const predicate = [key](auto const& item)
             {
                 return item.first == key;
             };
-            return std::find_if(std::begin(vec_), std::end(vec_), predicate);
+            return std::ranges::find_if(vec_, predicate);
         }
 
-        [[nodiscard]] TR_CONSTEXPR20 auto find(tr_quark const key) const noexcept
+        [[nodiscard]] constexpr auto find(tr_quark const key) const noexcept
         {
             return Vector::const_iterator{ const_cast<Map*>(this)->find(key) };
         }
 
-        [[nodiscard]] auto contains(tr_quark const key) const noexcept
+        [[nodiscard]] constexpr auto contains(tr_quark const key) const noexcept
         {
             return find(key) != end(); // NOLINT(readability-container-contains)
         }
 
-        [[nodiscard]] TR_CONSTEXPR20 auto size() const noexcept
+        [[nodiscard]] constexpr auto size() const noexcept
         {
             return std::size(vec_);
         }
 
-        [[nodiscard]] TR_CONSTEXPR20 auto empty() const noexcept
+        [[nodiscard]] constexpr auto empty() const noexcept
         {
             return std::empty(vec_);
         }
@@ -131,7 +131,7 @@ public:
             return 0U;
         }
 
-        bool replace_key(tr_quark const old_key, tr_quark const new_key)
+        constexpr bool replace_key(tr_quark const old_key, tr_quark const new_key)
         {
             if (contains(new_key))
             {
@@ -183,14 +183,14 @@ public:
         // --- custom functions
 
         template<typename Type>
-        [[nodiscard]] TR_CONSTEXPR20 auto* find_if(tr_quark const key) noexcept
+        [[nodiscard]] constexpr auto* find_if(tr_quark const key) noexcept
         {
             auto const iter = find(key);
             return iter != end() ? iter->second.get_if<Type>() : nullptr;
         }
 
         template<typename Type>
-        [[nodiscard]] TR_CONSTEXPR20 auto const* find_if(tr_quark const key) const noexcept
+        [[nodiscard]] constexpr auto const* find_if(tr_quark const key) const noexcept
         {
             return const_cast<Map*>(this)->find_if<Type>(key);
         }
@@ -244,7 +244,7 @@ public:
 
     [[nodiscard]] static auto make_raw(void const* value, size_t n_bytes)
     {
-        return tr_variant{ std::string_view{ reinterpret_cast<char const*>(value), n_bytes } };
+        return tr_variant{ std::string_view{ static_cast<char const*>(value), n_bytes } };
     }
 
     template<typename CharSpan>
@@ -310,7 +310,8 @@ public:
     [[nodiscard]] constexpr auto* get_if() noexcept
     {
         static_assert(
-            !std::is_same_v<std::decay_t<Val>, std::string> && !std::is_same_v<std::decay_t<Val>, std::string_view>,
+            !std::is_same_v<std::remove_cvref_t<Val>, std::string> &&
+                !std::is_same_v<std::remove_cvref_t<Val>, std::string_view>,
             "not supported -- use value_if<std::string_view>() instead.");
         return std::get_if<Val>(&val_);
     }
@@ -319,7 +320,8 @@ public:
     [[nodiscard]] constexpr auto const* get_if() const noexcept
     {
         static_assert(
-            !std::is_same_v<std::decay_t<Val>, std::string> && !std::is_same_v<std::decay_t<Val>, std::string_view>,
+            !std::is_same_v<std::remove_cvref_t<Val>, std::string> &&
+                !std::is_same_v<std::remove_cvref_t<Val>, std::string_view>,
             "not supported -- use value_if<std::string_view>() instead.");
         return const_cast<tr_variant*>(this)->get_if<Val>();
     }
@@ -337,7 +339,7 @@ public:
     }
 
     template<typename Val>
-    [[nodiscard]] constexpr std::optional<Val> value_if() noexcept
+    [[nodiscard]] constexpr std::optional<Val> value_if() const noexcept
     {
         if (auto const* const val = get_if<Val>())
         {
@@ -347,11 +349,8 @@ public:
         return {};
     }
 
-    template<typename Val>
-    [[nodiscard]] std::optional<Val> value_if() const noexcept
-    {
-        return const_cast<tr_variant*>(this)->value_if<Val>();
-    }
+    template<std::integral Val>
+    [[nodiscard]] constexpr std::optional<Val> value_if() const noexcept;
 
     template<typename Val>
     [[nodiscard]] constexpr bool holds_alternative() const noexcept
@@ -397,14 +396,91 @@ private:
     std::variant<std::monostate, std::nullptr_t, bool, int64_t, double, std::string, std::string_view, Vector, Map> val_;
 };
 
+// These specialisations could have been in the class body,
+// but aren't because https://gcc.gnu.org/bugzilla/show_bug.cgi?id=85282
+
 template<>
-[[nodiscard]] std::optional<int64_t> tr_variant::value_if() noexcept;
+[[nodiscard]] constexpr std::optional<std::string_view> tr_variant::value_if() const noexcept
+{
+    switch (index())
+    {
+    case StringIndex:
+        return *std::get_if<std::string>(&val_);
+
+    case StringViewIndex:
+        return *std::get_if<std::string_view>(&val_);
+
+    default:
+        return {};
+    }
+}
+
 template<>
-[[nodiscard]] std::optional<bool> tr_variant::value_if() noexcept;
+[[nodiscard]] constexpr std::optional<int64_t> tr_variant::value_if() const noexcept
+{
+    switch (index())
+    {
+    case IntIndex:
+        return *get_if<IntIndex>();
+
+    case BoolIndex:
+        return *get_if<BoolIndex>() ? 1 : 0;
+
+    default:
+        return {};
+    }
+}
+
 template<>
-[[nodiscard]] std::optional<double> tr_variant::value_if() noexcept;
+[[nodiscard]] constexpr std::optional<bool> tr_variant::value_if() const noexcept
+{
+    switch (index())
+    {
+    case BoolIndex:
+        return *get_if<BoolIndex>();
+
+    case IntIndex:
+        if (auto const val = *get_if<IntIndex>(); val == 0 || val == 1)
+        {
+            return val != 0;
+        }
+        break;
+
+    case StringIndex:
+    case StringViewIndex:
+        if (auto const val = value_if<std::string_view>(); val == "true")
+        {
+            return true;
+        }
+        else if (val == "false")
+        {
+            return false;
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    return {};
+}
+
 template<>
-[[nodiscard]] std::optional<std::string_view> tr_variant::value_if() noexcept;
+[[nodiscard]] std::optional<double> tr_variant::value_if() const noexcept;
+
+template<std::integral Val>
+[[nodiscard]] constexpr std::optional<Val> tr_variant::value_if() const noexcept
+{
+    static_assert(!std::is_same_v<Val, bool>);
+    static_assert(!std::is_same_v<Val, int64_t>);
+    if (auto val = value_if<int64_t>(); val && std::cmp_greater_equal(*val, std::numeric_limits<Val>::lowest()) &&
+        std::cmp_less_equal(*val, std::numeric_limits<Val>::max()))
+    {
+        return val;
+    }
+
+    return {};
+}
 
 // --- Strings
 

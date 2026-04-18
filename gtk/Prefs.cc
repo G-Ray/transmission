@@ -11,7 +11,6 @@
 
 #include <libtransmission/transmission.h>
 #include <libtransmission/serializer.h>
-#include <libtransmission/utils.h>
 #include <libtransmission/variant.h>
 
 #include <glibmm/miscutils.h>
@@ -20,18 +19,13 @@
 #include <string_view>
 
 using namespace std::literals;
-using namespace transmission::app;
-using libtransmission::serializer::to_variant;
-
-std::string gl_confdir;
-
-void gtr_pref_init(std::string_view config_dir)
-{
-    gl_confdir = config_dir;
-}
+using namespace tr::app;
+using tr::serializer::to_variant;
 
 namespace
 {
+std::string gl_confdir;
+
 [[nodiscard]] std::string get_default_download_dir()
 {
     if (auto dir = Glib::get_user_special_dir(TR_GLIB_USER_DIRECTORY(DOWNLOAD)); !std::empty(dir))
@@ -78,7 +72,7 @@ namespace
     map.try_emplace(TR_KEY_show_tracker_scrapes, false);
     map.try_emplace(TR_KEY_sort_mode, to_variant(DefaultSortMode));
     map.try_emplace(TR_KEY_sort_reversed, false);
-    map.try_emplace(TR_KEY_statusbar_stats, "total-ratio"sv);
+    map.try_emplace(TR_KEY_statusbar_stats, to_variant(DefaultStatsMode));
     map.try_emplace(TR_KEY_torrent_added_notification_enabled, true);
     map.try_emplace(TR_KEY_torrent_complete_notification_enabled, true);
     map.try_emplace(TR_KEY_torrent_complete_sound_enabled, true);
@@ -120,6 +114,11 @@ tr_variant& getPrefs()
     return settings;
 }
 } // namespace
+
+void gtr_pref_init(std::string_view config_dir)
+{
+    gl_confdir = config_dir;
+}
 
 tr_variant& gtr_pref_get_all()
 {
@@ -209,5 +208,5 @@ void gtr_pref_string_set(tr_quark const key, std::string_view value)
 
 void gtr_pref_save(tr_session* session)
 {
-    tr_sessionSaveSettings(session, gl_confdir.c_str(), getPrefs());
+    tr_sessionSaveSettings(session, gl_confdir, getPrefs());
 }

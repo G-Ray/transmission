@@ -17,6 +17,7 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <ranges>
 #include <mutex>
 #include <stack>
 #include <string>
@@ -38,6 +39,7 @@
 #ifdef _WIN32
 #include "libtransmission/crypto-utils.h"
 #endif
+#include "libtransmission/env.h"
 #include "libtransmission/log.h"
 #include "libtransmission/tr-assert.h"
 #include "libtransmission/utils.h"
@@ -138,7 +140,7 @@ CURLcode ssl_context_func(CURL* /*curl*/, void* ssl_ctx, void* /*user_data*/)
                 break;
             }
 
-            auto* const cert = tr_x509_cert_new(sys_cert->pbCertEncoded, sys_cert->cbCertEncoded);
+            auto* const cert = tr_x509_cert_new(sys_cert->pbCertEncoded, static_cast<long>(sys_cert->cbCertEncoded));
             if (cert == nullptr)
             {
                 continue;
@@ -226,14 +228,14 @@ public:
 
     ~Impl()
     {
-        deadline_ = mediator.now();
+        deadline_ns_ = to_ns(mediator.now());
         queued_tasks_cv_.notify_one();
         curl_thread->join();
     }
 
     void startShutdown(std::chrono::milliseconds deadline)
     {
-        deadline_ = mediator.now() + std::chrono::duration_cast<std::chrono::seconds>(deadline).count();
+        deadline_ns_ = to_ns(mediator.now() + deadline);
         queued_tasks_cv_.notify_one();
     }
 
@@ -437,6 +439,9 @@ public:
     static auto constexpr BandwidthPauseMsec = long{ 500 };
     static auto constexpr DnsCacheTimeoutSecs = long{ 60 * 60 };
     static auto constexpr MaxRedirects = long{ 10 };
+    static auto constexpr MaxHostConnections = long{ 16 };
+    static auto constexpr MaxTotalConnections = long{ 96 };
+    static auto constexpr MaxCachedConnections = MaxTotalConnections;
 
     bool const curl_verbose = tr_env_key_exists("TR_CURL_VERBOSE");
     bool const curl_ssl_verify = !tr_env_key_exists("TR_CURL_SSL_NO_VERIFY");
@@ -455,21 +460,29 @@ public:
     // if unset: steady-state, all is good
     // if set: do not accept new tasks
     // if set and deadline reached: kill all remaining tasks
-    std::atomic<time_t> deadline_ = {}; // NOLINT(readability-redundant-member-init)
+    using Clock = std::chrono::steady_clock;
+    static auto constexpr NoDeadline = int64_t{ 0 };
 
-    [[nodiscard]] auto deadline() const
+    std::atomic<int64_t> deadline_ns_ = {}; // NOLINT(readability-redundant-member-init)
+
+    [[nodiscard]] static int64_t to_ns(Clock::time_point tp)
     {
-        return deadline_.load();
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(tp.time_since_epoch()).count();
+    }
+
+    [[nodiscard]] auto deadline_ns() const
+    {
+        return deadline_ns_.load();
     }
 
     [[nodiscard]] bool deadline_exists() const
     {
-        return deadline() != time_t{};
+        return deadline_ns() != NoDeadline;
     }
 
     [[nodiscard]] bool deadline_reached() const
     {
-        return deadline_exists() && deadline() <= mediator.now();
+        return deadline_exists() && deadline_ns() <= to_ns(mediator.now());
     }
 
     [[nodiscard]] CURL* get_easy(std::string_view host)
@@ -694,9 +707,9 @@ public:
     {
         auto const lock = std::unique_lock{ tasks_mutex_ };
 
-        auto const iter = std::find(std::begin(running_tasks_), std::end(running_tasks_), task);
-        TR_ASSERT(iter != std::end(running_tasks_));
-        if (iter == std::end(running_tasks_))
+        auto const iter = std::ranges::find(running_tasks_, task);
+        TR_ASSERT(iter != std::ranges::end(running_tasks_));
+        if (iter == std::ranges::end(running_tasks_))
         {
             return;
         }
@@ -716,6 +729,14 @@ public:
     void curlThreadFunc()
     {
         auto const multi = curl_helpers::multi_unique_ptr{ curl_multi_init() };
+#if LIBCURL_VERSION_NUM >= 0x071003 /* 7.16.3 */
+        (void)curl_multi_setopt(multi.get(), CURLMOPT_MAXCONNECTS, MaxCachedConnections);
+#endif
+#if LIBCURL_VERSION_NUM >= 0x071E00 /* 7.30.0 */
+        (void)curl_multi_setopt(multi.get(), CURLMOPT_MAX_TOTAL_CONNECTIONS, MaxTotalConnections);
+        (void)curl_multi_setopt(multi.get(), CURLMOPT_MAX_HOST_CONNECTIONS, MaxHostConnections);
+#endif
+        auto const start_time = mediator.now();
 
         auto repeats = unsigned{};
         for (;;)
@@ -762,13 +783,20 @@ public:
 
             resumePausedTasks();
 
+            // During steady state, wake up once per second.
+            // But during startup, wake up 10x more often. This is so tests
+            // that should take a few msec don't block for a full second
+            // while tr_session waits for this thread to finish.
+            static auto constexpr StartupSecs = std::chrono::seconds{ 15 };
+            auto const timeout_ms = mediator.now() - start_time < StartupSecs ? 50 : 1000;
+
             // Adapted from https://curl.se/libcurl/c/curl_multi_wait.html docs.
             // 'numfds' being zero means either a timeout or no file descriptors to
             // wait for. Try timeout on first occurrence, then assume no file
             // descriptors and no file descriptors to wait for means wait for 100
             // milliseconds.
             auto numfds = int{};
-            curl_multi_wait(multi.get(), nullptr, 0, 1000, &numfds);
+            curl_multi_wait(multi.get(), nullptr, 0, timeout_ms, &numfds);
             if (numfds == 0)
             {
                 ++repeats;

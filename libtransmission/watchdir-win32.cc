@@ -20,16 +20,15 @@
 #include <fmt/format.h>
 
 #define LIBTRANSMISSION_WATCHDIR_MODULE
-
-#include "libtransmission/transmission.h"
-
 #include "libtransmission/log.h"
 #include "libtransmission/net.h"
+#include "libtransmission/string-utils.h"
 #include "libtransmission/tr-assert.h"
+#include "libtransmission/types.h"
 #include "libtransmission/utils.h"
 #include "libtransmission/watchdir-base.h"
 
-namespace libtransmission
+namespace tr
 {
 namespace
 {
@@ -83,11 +82,7 @@ BOOL tr_get_overlapped_result_ex(
 class Win32Watchdir final : public impl::BaseWatchdir
 {
 public:
-    Win32Watchdir(
-        std::string_view dirname,
-        Callback callback,
-        libtransmission::TimerMaker& timer_maker,
-        struct event_base* event_base)
+    Win32Watchdir(std::string_view dirname, Callback callback, tr::TimerMaker& timer_maker, struct event_base* event_base)
         : BaseWatchdir{ dirname, std::move(callback), timer_maker }
     {
         init(event_base);
@@ -234,7 +229,7 @@ private:
             info->NextEntryOffset = bytes_transferred -
                 (reinterpret_cast<BYTE*>(info) - reinterpret_cast<BYTE*>(std::data(buffer_)));
 
-            send(notify_pipe_[1], reinterpret_cast<char const*>(std::data(buffer_)), bytes_transferred, 0);
+            send(notify_pipe_[1], reinterpret_cast<char const*>(std::data(buffer_)), static_cast<int>(bytes_transferred), 0);
 
             if (!to_bool(ReadDirectoryChangesW(
                     fd_,
@@ -377,4 +372,4 @@ std::unique_ptr<Watchdir> Watchdir::create(
     return std::make_unique<Win32Watchdir>(dirname, std::move(callback), timer_maker, evbase);
 }
 
-} // namespace libtransmission
+} // namespace tr

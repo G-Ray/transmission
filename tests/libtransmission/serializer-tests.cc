@@ -5,6 +5,7 @@
 
 #include <climits>
 #include <cstdint>
+#include <filesystem>
 #include <list>
 #include <mutex>
 #include <optional>
@@ -13,18 +14,24 @@
 #include <vector>
 
 #include <libtransmission/net.h>
+#include <libtransmission/log.h>
 #include <libtransmission/quark.h>
 #include <libtransmission/serializer.h>
 #include <libtransmission/variant.h>
 
 #include "test-fixtures.h"
 
-using SerializerTest = ::libtransmission::test::TransmissionTest;
+using SerializerTest = ::tr::test::TransmissionTest;
 using namespace std::literals;
-using libtransmission::serializer::Converters;
+using tr::serializer::Converters;
 
 namespace
 {
+
+[[nodiscard]] std::string toString(std::u8string const& value)
+{
+    return { reinterpret_cast<char const*>(std::data(value)), std::size(value) };
+}
 
 struct Rect
 {
@@ -59,7 +66,12 @@ void registerRectConverter()
             return false;
         }
 
-        *tgt = Rect{ static_cast<int>(*x), static_cast<int>(*y), static_cast<int>(*w), static_cast<int>(*h) };
+        *tgt = Rect{
+            .x = static_cast<int>(*x),
+            .y = static_cast<int>(*y),
+            .width = static_cast<int>(*w),
+            .height = static_cast<int>(*h),
+        };
         return true;
     };
 
@@ -142,11 +154,103 @@ TEST_F(SerializerTest, usesBuiltins)
     }
 }
 
+TEST_F(SerializerTest, usesTimeT)
+{
+    static auto constexpr Expected = time_t{ 1774486600 };
+    auto const var = Converters::serialize(Expected);
+    EXPECT_TRUE(var.holds_alternative<int64_t>());
+    EXPECT_EQ(var.value_if<time_t>(), Expected);
+
+    auto actual = time_t{};
+    EXPECT_TRUE(Converters::deserialize(var, &actual));
+    EXPECT_EQ(actual, Expected);
+}
+
+TEST_F(SerializerTest, usesU8String)
+{
+    auto const expected = std::u8string{ u8"hello" };
+    auto const var = Converters::serialize(expected);
+    EXPECT_TRUE(var.holds_alternative<std::string_view>());
+    EXPECT_EQ(var.value_if<std::string_view>().value_or(""sv), "hello"sv);
+
+    auto actual = std::u8string{};
+    EXPECT_TRUE(Converters::deserialize(var, &actual));
+    EXPECT_EQ(toString(actual), toString(expected));
+}
+
+TEST_F(SerializerTest, usesFsPath)
+{
+    auto const expected = std::filesystem::path{ std::u8string{ u8"foo/βar" } };
+    auto const var = Converters::serialize(expected);
+    EXPECT_TRUE(var.holds_alternative<std::string_view>());
+    EXPECT_EQ(var.value_if<std::string_view>().value_or(""sv), "foo/βar"sv);
+
+    auto actual = std::filesystem::path{};
+    EXPECT_TRUE(Converters::deserialize(var, &actual));
+    EXPECT_EQ(toString(actual.u8string()), toString(expected.u8string()));
+}
+
+TEST_F(SerializerTest, usesTrPex)
+{
+    static auto constexpr CompactIp = std::array{ '\x7F', '\0', '\0', '\1', '\x73', '\x1A' }; // 127.0.0.1:6771
+    static_assert(CompactIp.size() == tr_socket_address::CompactSockAddrBytes[TR_AF_INET]);
+
+    auto const expected_flags = static_cast<uint8_t>(tr_rand_int(0x100U));
+    auto const expected_sockaddr = tr_socket_address::from_compact_ipv4(reinterpret_cast<std::byte const*>(CompactIp.data()))
+                                       .first;
+    auto const var = Converters::serialize(tr_pex{ expected_sockaddr, expected_flags });
+
+    auto* const map = var.get_if<tr_variant::Map>();
+    ASSERT_NE(map, nullptr);
+    auto const compact_ip = map->value_if<std::string_view>(TR_KEY_socket_address);
+    ASSERT_TRUE(compact_ip);
+    EXPECT_EQ(
+        std::lexicographical_compare_three_way(compact_ip->begin(), compact_ip->end(), CompactIp.begin(), CompactIp.end()),
+        std::strong_ordering::equivalent);
+    EXPECT_EQ(map->value_if<int64_t>(TR_KEY_flags), expected_flags);
+
+    auto actual = tr_pex{};
+    EXPECT_TRUE(Converters::deserialize(var, &actual));
+    EXPECT_EQ(actual.socket_address, expected_sockaddr);
+    EXPECT_EQ(actual.flags, expected_flags);
+}
+
+TEST_F(SerializerTest, u8StringWarnsOnInvalidUtf8)
+{
+    auto const bad = std::string{ static_cast<char>(0xC3), static_cast<char>(0x28) };
+    auto const var = tr_variant{ std::string_view{ bad } };
+
+    auto const old_level = tr_logGetLevel();
+    tr_logSetLevel(TR_LOG_WARN);
+    tr_logSetQueueEnabled(true);
+    tr_logFreeQueue(tr_logGetQueue());
+
+    auto actual = std::u8string{};
+    EXPECT_TRUE(Converters::deserialize(var, &actual));
+
+    auto* const msgs = tr_logGetQueue();
+    auto warned = false;
+    for (auto* msg = msgs; msg != nullptr; msg = msg->next)
+    {
+        if (msg->level == TR_LOG_WARN && msg->message.find("contains invalid UTF-8") != std::string::npos)
+        {
+            warned = true;
+            break;
+        }
+    }
+
+    tr_logFreeQueue(msgs);
+    tr_logSetQueueEnabled(false);
+    tr_logSetLevel(old_level);
+
+    EXPECT_TRUE(warned);
+}
+
 TEST_F(SerializerTest, usesCustomTypes)
 {
     registerRectConverter();
 
-    static constexpr Rect Expected{ 10, 20, 640, 480 };
+    static constexpr Rect Expected{ .x = 10, .y = 20, .width = 640, .height = 480 };
     auto const var = Converters::serialize(Expected);
 
     auto actual = Rect{};
@@ -192,7 +296,10 @@ TEST_F(SerializerTest, usesVectorsOfCustom)
 {
     registerRectConverter();
 
-    auto const expected = std::vector<Rect>{ { 1, 2, 3, 4 }, { 10, 20, 640, 480 } };
+    auto const expected = std::vector<Rect>{
+        { .x = 1, .y = 2, .width = 3, .height = 4 },
+        { .x = 10, .y = 20, .width = 640, .height = 480 },
+    };
     auto const var = Converters::serialize(expected);
 
     auto actual = decltype(expected){};
@@ -277,7 +384,7 @@ TEST_F(SerializerTest, usesOptionalOfCustom)
 {
     registerRectConverter();
 
-    constexpr auto Expected = std::optional{ Rect{ 1, 2, 3, 4 } };
+    constexpr auto Expected = std::optional{ Rect{ .x = 1, .y = 2, .width = 3, .height = 4 } };
     auto const var = Converters::serialize(Expected);
 
     auto actual = decltype(Expected){};
@@ -295,9 +402,9 @@ TEST_F(SerializerTest, optionalRejectsWrongType)
 
 // ---
 
-using libtransmission::serializer::Field;
-using libtransmission::serializer::load;
-using libtransmission::serializer::save;
+using tr::serializer::Field;
+using tr::serializer::load;
+using tr::serializer::save;
 
 struct Endpoint
 {
@@ -323,7 +430,7 @@ struct Endpoint
 
 TEST_F(SerializerTest, fieldSaveLoad)
 {
-    auto const expected = Endpoint{ "localhost", tr_port::from_host(51413) };
+    auto const expected = Endpoint{ .address = "localhost", .port = tr_port::from_host(51413) };
 
     // Save to variant
     auto constexpr Expected = R"({"address":"localhost","port":51413})"sv;
@@ -339,7 +446,7 @@ TEST_F(SerializerTest, fieldSaveLoad)
 
 TEST_F(SerializerTest, fieldLoadIgnoresMissingKeys)
 {
-    auto endpoint = Endpoint{ "default", tr_port::from_host(9999) };
+    auto endpoint = Endpoint{ .address = "default", .port = tr_port::from_host(9999) };
     auto const original = endpoint;
 
     load(endpoint, Endpoint::Fields, tr_variant::make_map());
@@ -350,7 +457,7 @@ TEST_F(SerializerTest, fieldLoadIgnoresMissingKeys)
 
 TEST_F(SerializerTest, fieldLoadIgnoresNonMap)
 {
-    auto endpoint = Endpoint{ "default", tr_port::from_host(9999) };
+    auto endpoint = Endpoint{ .address = "default", .port = tr_port::from_host(9999) };
     auto const original = endpoint;
 
     load(endpoint, Endpoint::Fields, tr_variant{ 42 });

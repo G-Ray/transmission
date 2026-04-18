@@ -21,6 +21,10 @@ export const RPC = {
   _UpSpeedLimited: 'speed_limit_up_enabled',
 };
 
+function getResponseParams(response) {
+  return response.result ?? response.error.data.result;
+}
+
 export class Remote {
   _connection_alert = null;
   _session_id = '';
@@ -163,8 +167,8 @@ export class Remote {
       o.params.ids = torrentIds;
     }
     this.sendRequest(o, (response) => {
-      const { torrents, removed } = response.result;
-      callback.call(context, torrents, removed);
+      const res = getResponseParams(response);
+      callback.call(context, res.torrents, res.removed);
     });
   }
 
@@ -176,16 +180,16 @@ export class Remote {
       params: { path: dir },
     };
     this.sendRequest(o, (response) => {
-      const { path, size_bytes } = response.result;
-      callback.call(context, path, size_bytes);
+      const res = getResponseParams(response);
+      callback.call(context, res.path, res.size_bytes);
     });
   }
 
   changeFileCommand(torrentId, fileIndices, command) {
     const params = {
+      [command]: fileIndices,
       ids: [torrentId],
     };
-    params[command] = fileIndices;
     this.sendRequest(
       {
         jsonrpc: RPC._JsonRpcVersion,

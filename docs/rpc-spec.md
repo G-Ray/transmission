@@ -25,6 +25,7 @@ Some people outside of the Transmission project have written libraries that wrap
 
 | Language | Link
 |:---|:---
+| C# .NET10 | https://www.nuget.org/packages/Transmission.API.RPC.NET/
 | C# | https://www.nuget.org/packages/Transmission.API.RPC
 | Go | https://github.com/hekmon/transmissionrpc
 | Python | https://github.com/Trim21/transmission-rpc
@@ -66,7 +67,7 @@ JSON-RPC 2.0 allows for additional information about an error be included in the
 
 In Transmission, this key is an Object that includes:
 
-1. An optional `errorString` string that provides additional information that is not included in the `message` key of the Error object.
+1. An optional `error_string` string that provides additional information that is not included in the `message` key of the Error object.
 2. An optional `result` Object that contains additional keys defined by the method.
 
 ```json
@@ -76,9 +77,9 @@ In Transmission, this key is an Object that includes:
       "code": 7,
       "message": "HTTP error from backend service",
       "data": {
-         "errorString": "Couldn't test port: No Response (0)",
+         "error_string": "Couldn't test port: No Response (0)",
          "result": {
-            "ipProtocol": "ipv6"
+            "ip_protocol": "ipv6"
          }
       }
    },
@@ -120,7 +121,7 @@ matches it to one of the whitelisted names. Regardless of host whitelist
 content, `localhost` and `localhost.` domain names as well as all the IP
 addresses are always implicitly allowed.
 
-For more information on configuration, see settings.json documentation for
+For more information on configuration, see [Editing Configuration Files](Editing-Configuration-Files.md#rpc) documentation for
 `rpc_host_whitelist_enabled` and `rpc_host_whitelist` keys.
 
 #### 2.2.3 Authentication
@@ -247,8 +248,8 @@ The 'source' column here corresponds to the data structure there.
 | `desired_available`| number| tr_stat
 | `done_date`| number | tr_stat
 | `download_dir` | string  | tr_torrent
-| `downloaded_ever` | number  | tr_stat
-| `download_limit` | number  | tr_torrent
+| `integer` | number  | tr_stat
+| `download_limit` | integer  | tr_torrent
 | `download_limited` | boolean | tr_torrent
 | `edit_date` | number | tr_stat
 | `error` | number | tr_stat
@@ -263,7 +264,7 @@ The 'source' column here corresponds to the data structure there.
 | `have_unchecked`| number| tr_stat
 | `have_valid`| number| tr_stat
 | `honors_session_limits`| boolean| tr_torrent
-| `id` | number | tr_torrent
+| `id` | integer | tr_torrent
 | `is_finished` | boolean| tr_stat
 | `is_private` | boolean| tr_torrent
 | `is_stalled` | boolean| tr_stat
@@ -307,12 +308,13 @@ The 'source' column here corresponds to the data structure there.
 | `trackers`| array (see below)| n/a
 | `tracker_list` | string | string of announce URLs, one per line, with a blank line between tiers
 | `tracker_stats`| array (see below)| n/a
-| `uploaded_ever`| number| tr_stat
-| `upload_limit`| number| tr_torrent
+| `uploaded_ever`| integer| tr_stat
+| `upload_limit`| integer| tr_torrent
 | `upload_limited`| boolean| tr_torrent
 | `upload_ratio`| double| tr_stat
 | `wanted`| array (see below)| n/a
-| `webseeds`| array of strings | tr_tracker_view
+| `webseeds`| array of strings | **DEPRECATED** tr_tracker_view
+| `webseeds_ex`| array (see below)| n/a
 | `webseeds_sending_to_us`| number| tr_stat
 
 `availability`: An array of `piece_count` numbers representing the number of connected peers that have each piece, or -1 if we already have the piece ourselves.
@@ -398,7 +400,7 @@ Files are returned in the order they are laid out in the torrent. References to 
 | Key | Value Type | transmission.h source
 |:--|:--|:--
 | `announce` | string | tr_tracker_view
-| `id` | number | tr_tracker_view
+| `id` | integer | tr_tracker_view
 | `scrape` | string | tr_tracker_view
 | `sitename` | string | tr_tracker_view
 | `tier` | number | tr_tracker_view
@@ -414,7 +416,7 @@ Files are returned in the order they are laid out in the torrent. References to 
 | `has_announced`            | boolean    | tr_tracker_view
 | `has_scraped`              | boolean    | tr_tracker_view
 | `host`                     | string     | tr_tracker_view
-| `id`                       | number     | tr_tracker_view
+| `id`                       | integer    | tr_tracker_view
 | `is_backup`                | boolean    | tr_tracker_view
 | `last_announce_peer_count` | number     | tr_tracker_view
 | `last_announce_result`     | string     | tr_tracker_view
@@ -436,6 +438,14 @@ Files are returned in the order they are laid out in the torrent. References to 
 | `sitename`                 | string     | tr_tracker_view
 | `tier`                     | number     | tr_tracker_view
 
+
+`webseeds_ex`: array of objects, each containing:
+
+| Key | Value Type | transmission.h source
+|:--|:--|:--
+| `url` | string | tr_webseed_view
+| `is_downloading` | boolean | tr_webseed_view
+| `download_bytes_per_second` | number | tr_webseed_view
 
 `wanted`: An array of `tr_torrentFileCount()` booleans, true if the corresponding file is to be downloaded. (Source: `tr_file_view`)
 
@@ -571,7 +581,7 @@ Response parameters: `path`, `name`, and `id`, holding the torrent ID integer
 | `blocklist_enabled` | boolean | true means enabled
 | `blocklist_size` | number | number of rules in the blocklist
 | `blocklist_url` | string | location of the blocklist to use for `blocklist_update`
-| `cache_size_mib` | number | maximum size of the disk cache (MiB). Pieces are guaranteed to be written to filesystem if sequential download is enabled. Otherwise, data might still be in cache only.
+| `cache_size_mib` | number |**DEPRECATED** This property will be removed in Transmission 5.0.0. Clients should stop using this property now.
 | `config_dir` | string | location of transmission's configuration directory
 | `default_trackers` | string | announce URLs, one per line, and a blank line between [tiers](https://www.bittorrent.org/beps/bep_0012.html).
 | `dht_enabled` | boolean | true means allow DHT in public torrents
@@ -579,7 +589,7 @@ Response parameters: `path`, `name`, and `id`, holding the torrent ID integer
 | `download_dir_free_space` | number |  **DEPRECATED** Use the `free_space` method instead.
 | `download_queue_enabled` | boolean | if true, limit how many torrents can be downloaded at once
 | `download_queue_size` | number | max number of torrents to download at once (see `download_queue_enabled`)
-| `encryption` | string | `required`, `preferred`, `tolerated`
+| `encryption` | string | `required`, `preferred`, `allowed`
 | `idle_seeding_limit` | number | torrents we're seeding will be stopped if they're idle for this long
 | `idle_seeding_limit_enabled` | boolean | true if the seeding inactivity limit is honored by default
 | `incomplete_dir` | string | path for incomplete torrents, when enabled
@@ -591,7 +601,7 @@ Response parameters: `path`, `name`, and `id`, holding the torrent ID integer
 | `peer_port` | number | port number
 | `pex_enabled` | boolean | true means allow PEX in public torrents
 | `port_forwarding_enabled` | boolean | true means ask upstream router to forward the configured peer port to transmission using UPnP or NAT-PMP
-| `preferred_transports` | string[] | preference of transport protocols, see `settings.json` for details
+| `preferred_transports` | string[] | preference of transport protocols, see [Editing Configuration Files](Editing-Configuration-Files.md#misc) for details
 | `queue_stalled_enabled` | boolean | whether or not to consider idle torrents as stalled
 | `queue_stalled_minutes` | number | torrents that are idle for N minuets aren't counted toward `seed_queue_size` or `download_queue_size`
 | `rename_partial_files` | boolean | true means append `.part` to incomplete files
@@ -611,9 +621,9 @@ Response parameters: `path`, `name`, and `id`, holding the torrent ID integer
 | `seed_ratio_limited` | boolean | true if `seed_ratio_limit` is honored by default
 | `sequential_download` | boolean | true means sequential download is enabled by default for added torrents
 | `session_id` | string | the current `X-Transmission-Session-Id` value
-| `speed_limit_down` | number | max global download speed (kB/s)
+| `speed_limit_down` | integer | max global download speed (kB/s)
 | `speed_limit_down_enabled` | boolean | true means enabled
-| `speed_limit_up` | number | max global upload speed (kB/s)
+| `speed_limit_up` | integer | max global upload speed (kB/s)
 | `speed_limit_up_enabled` | boolean | true means enabled
 | `start_added_torrents` | boolean | true means added torrents will be started right away
 | `tcp_enabled` | boolean | **DEPRECATED** Use `preferred_transports` instead
@@ -769,9 +779,9 @@ Request parameters:
 |:--|:--|:--
 | `honors_session_limits` | boolean  | true if session upload limits are honored
 | `name` | string | Bandwidth group name
-| `speed_limit_down` | number | max global download speed (kB/s)
+| `speed_limit_down` | integer | max global download speed (kB/s)
 | `speed_limit_down_enabled` | boolean | true means enabled
-| `speed_limit_up` | number | max global upload speed (kB/s)
+| `speed_limit_up` | integer | max global upload speed (kB/s)
 | `speed_limit_up_enabled` | boolean | true means enabled
 
 Response parameters: none
@@ -796,9 +806,9 @@ A bandwidth group description object has:
 |:--|:--|:--
 | `honors_session_limits` | boolean  | true if session upload limits are honored
 | `name` | string | Bandwidth group name
-| `speed_limit_down` | number | max global download speed (kB/s)
+| `speed_limit_down` | integer | max global download speed (kB/s)
 | `speed_limit_down_enabled` | boolean | true means enabled
-| `speed_limit_up` | number | max global upload speed (kB/s)
+| `speed_limit_up` | integer | max global upload speed (kB/s)
 | `speed_limit_up_enabled` | boolean | true means enabled
 
 ## 5 Protocol versions
@@ -1093,3 +1103,22 @@ Transmission 4.1.0 (`rpc_version_semver` 6.0.0, `rpc_version`: 18)
 | `torrent_get` | :bomb: `wanted` is now a boolean array instead of 1/0
 | `session_get` | :bomb: renamed `cache_size_mb` to `cache_size_mib`
 | `session_set` | :bomb: renamed `cache_size_mb` to `cache_size_mib`
+| `session_get` | :bomb: renamed `tolerated` to `allowed` in `encryption`
+| `session_set` | :bomb: renamed `tolerated` to `allowed` in `encryption`
+
+Transmission 4.1.1 (`rpc_version_semver` 6.0.1, `rpc_version`: 19)
+
+| Method | Description
+|:---|:---
+| `session_get` | `speed_limit_down` reverted to return an integer
+| `session_get` | `speed_limit_up` reverted to return an integer
+| `group_get` | `speed_limit_down` reverted to return an integer
+| `group_get` | `speed_limit_up` reverted to return an integer
+
+Transmission 4.2.0 (`rpc_version_semver` 6.1.0, `rpc_version`: ?)
+
+| Method | Description
+|:---|:---
+| `torrent_get` | new arg `webseeds_ex`
+| `torrent_get` | **DEPRECATED** `webseeds`. Use `webseeds_ex` instead.
+| `session_get` | **DEPRECATED** `cache_size_mib`. The memory cache is being removed, making this setting moot. The setting will still be gettable and settable via RPC `session_get` and `session_set` until Transmission 5.0.0 to avoid client breakage, but it will be otherwise unused in libtransmission. Clients should stop using this key.

@@ -33,9 +33,10 @@
 #include "libtransmission/net.h"
 #include "libtransmission/peer-socket.h"
 #include "libtransmission/session.h"
+#include "libtransmission/string-utils.h"
 #include "libtransmission/tr-assert.h"
-#include "libtransmission/tr-macros.h"
 #include "libtransmission/tr-strbuf.h"
+#include "libtransmission/types.h"
 #include "libtransmission/utils.h"
 
 using namespace std::literals;
@@ -111,39 +112,6 @@ int tr_make_listen_socket_ipv6only(tr_socket_t const sock)
 
 // - TCP Sockets
 
-[[nodiscard]] std::optional<tr_diffserv_t> tr_diffserv_t::from_string(std::string_view name)
-{
-    auto const needle = tr_strlower(tr_strv_strip(name));
-
-    for (auto const& [value, key] : Names)
-    {
-        if (needle == key)
-        {
-            return tr_diffserv_t(value);
-        }
-    }
-
-    if (auto value = tr_num_parse<int>(needle); value)
-    {
-        return tr_diffserv_t(*value);
-    }
-
-    return {};
-}
-
-std::string tr_diffserv_t::toString() const
-{
-    for (auto const& [value, key] : Names)
-    {
-        if (value_ == value)
-        {
-            return std::string{ key };
-        }
-    }
-
-    return std::to_string(value_);
-}
-
 void tr_netSetDiffServ([[maybe_unused]] tr_socket_t s, [[maybe_unused]] int tos, tr_address_type type)
 {
     if (s == TR_BAD_SOCKET)
@@ -208,7 +176,7 @@ tr_socket_t createSocket(int domain, int type)
         return TR_BAD_SOCKET;
     }
 
-    if (evutil_make_socket_nonblocking(sockfd) == -1)
+    if (evutil_make_socket_nonblocking(static_cast<evutil_socket_t>(sockfd)) == -1)
     {
         tr_net_close_socket(sockfd);
         return TR_BAD_SOCKET;
@@ -327,7 +295,7 @@ tr_socket_t tr_netBindTCPImpl(tr_address const& addr, tr_port port, bool suppres
         return TR_BAD_SOCKET;
     }
 
-    if (evutil_make_socket_nonblocking(fd) == -1)
+    if (evutil_make_socket_nonblocking(static_cast<evutil_socket_t>(fd)) == -1)
     {
         *err_out = sockerrno;
         tr_net_close_socket(fd);
@@ -336,7 +304,7 @@ tr_socket_t tr_netBindTCPImpl(tr_address const& addr, tr_port port, bool suppres
 
     int optval = 1;
     (void)setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, reinterpret_cast<char const*>(&optval), sizeof(optval));
-    (void)evutil_make_listen_socket_reuseable(fd);
+    (void)evutil_make_listen_socket_reuseable(static_cast<evutil_socket_t>(fd));
 
     if (addr.is_ipv6() && tr_make_listen_socket_ipv6only(fd) == -1 &&
         sockerrno != ENOPROTOOPT) // if the kernel doesn't support it, ignore it
@@ -426,7 +394,8 @@ std::optional<std::pair<tr_socket_address, tr_socket_t>> tr_netAccept(tr_session
     // make the socket unblocking,
     // and confirm we don't have too many peers
     auto const addrport = tr_socket_address::from_sockaddr(reinterpret_cast<struct sockaddr*>(&sock));
-    if (!addrport || evutil_make_socket_nonblocking(sockfd) == -1 || tr_peer_socket::limit_reached(session))
+    if (!addrport || evutil_make_socket_nonblocking(static_cast<evutil_socket_t>(sockfd)) == -1 ||
+        tr_peer_socket::limit_reached(session))
     {
         tr_net_close_socket(sockfd);
         return {};
@@ -437,7 +406,7 @@ std::optional<std::pair<tr_socket_address, tr_socket_t>> tr_netAccept(tr_session
 
 void tr_net_close_socket(tr_socket_t sockfd)
 {
-    evutil_closesocket(sockfd);
+    evutil_closesocket(static_cast<evutil_socket_t>(sockfd));
 }
 
 // ---
@@ -505,20 +474,15 @@ std::optional<tr_address> tr_address::from_string(std::string_view address_sv)
     }
 }
 
-std::string_view tr_address::display_name(char* out, size_t outlen) const
-{
-    TR_ASSERT(is_valid());
-    if (auto* name = evutil_inet_ntop(tr_ip_protocol_to_af(type), &addr, out, outlen))
-    {
-        return name;
-    }
-    return "Invalid address"sv;
-}
-
 [[nodiscard]] std::string tr_address::display_name() const
 {
     auto buf = std::array<char, std::max(INET_ADDRSTRLEN, INET6_ADDRSTRLEN)>{};
-    return std::string{ display_name(std::data(buf), std::size(buf)) };
+    TR_ASSERT(is_valid());
+    if (auto* name = evutil_inet_ntop(tr_ip_protocol_to_af(type), &addr, std::data(buf), std::size(buf)))
+    {
+        return std::string{ name };
+    }
+    return std::string{ "Invalid address" };
 }
 
 std::pair<tr_address, std::byte const*> tr_address::from_compact_ipv4(std::byte const* compact) noexcept
@@ -639,16 +603,26 @@ std::optional<unsigned> tr_address::to_interface_index() const noexcept
     return {};
 }
 
-int tr_address::compare(tr_address const& that) const noexcept // <=>
+std::strong_ordering tr_address::operator<=>(tr_address const& that) const noexcept
 {
     // IPv6 addresses are always "greater than" IPv4
-    if (auto const val = tr_compare_3way(this->type, that.type); val != 0)
+    if (auto const val = this->type <=> that.type; val != 0)
     {
         return val;
     }
 
-    return this->is_ipv4() ? memcmp(&this->addr.addr4, &that.addr.addr4, sizeof(this->addr.addr4)) :
-                             memcmp(&this->addr.addr6.s6_addr, &that.addr.addr6.s6_addr, sizeof(this->addr.addr6.s6_addr));
+    auto const val = this->is_ipv4() ?
+        memcmp(&this->addr.addr4, &that.addr.addr4, sizeof(this->addr.addr4)) :
+        memcmp(&this->addr.addr6.s6_addr, &that.addr.addr6.s6_addr, sizeof(this->addr.addr6.s6_addr));
+    if (val < 0)
+    {
+        return std::strong_ordering::less;
+    }
+    if (val > 0)
+    {
+        return std::strong_ordering::greater;
+    }
+    return std::strong_ordering::equal;
 }
 
 // https://en.wikipedia.org/wiki/Reserved_IP_addresses
@@ -698,7 +672,7 @@ std::optional<tr_address> tr_address::from_ipv4_mapped() const noexcept
 
 // --- tr_socket_addrses
 
-std::string tr_socket_address::display_name(tr_address const& address, tr_port port) noexcept
+std::string tr_socket_address::display_name(tr_address const& address, tr_port port)
 {
     return fmt::format(fmt::runtime(address.is_ipv6() ? "[{:s}]:{:d}" : "{:s}:{:d}"), address.display_name(), port.host());
 }
